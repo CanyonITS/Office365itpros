@@ -1834,3 +1834,65 @@ Try {
 } Catch {
     Write-Error ("Failed to create new list item: {0}" -f $_.Exception.Message)
 }
+
+Write-Host ("File {0} is now archived" -f $File.Name) -ForegroundColor Red
+
+$StartDate = (Get-Date).AddDays(-180)
+$EndDate = Get-Date
+[array]$Domains = Get-AcceptedDomain | Select-Object -ExpandProperty DomainName
+$Operations = "MemberAdded"
+$RecordType = "MicrosoftTeams"
+Write-Output "Searching audit log for Microsoft Teams MemberAdded events between $StartDate and $EndDate..."
+[array]$Records = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -Formatted `
+     -SessionCommand ReturnLargeSet -ResultSize  5000 -Operations $Operations -RecordType $RecordType
+$Records = $Records | Sort-Object Identity -Unique
+If ($Records) {
+    Write-Host ("{0} audit records found for {1} operations between {2} and {3}" -f $Records.Count, $Operations, $StartDate, $EndDate)
+} Else {
+    Write-Host ("No audit records found for {0} operations between {1} and {2}" -f $Operations, $StartDate, $EndDate)
+    Break
+}   
+
+$Report = [System.Collections.Generic.List[Object]]::new()
+
+ForEach ($Rec in $Records) {    
+    $AuditData = $Rec.AuditData | ConvertFrom-Json
+    
+    If ($AuditData.CommunicationType -eq "OneOnOne") {
+        $ForeignDomain = $AuditData.ParticipantInfo.ParticipatingDomains | Where-Object {$_ -notin $Domains}
+        $ForeignTenantId = $AuditData.ParticipantInfo.ParticipatingTenantIds | Where-Object {$_ -ne $AuditData.OrganizationId}
+        $ReportLine = [PSCustomObject][Ordered]@{
+            TimeStamp       = Get-Date ($AuditData.CreationTime) -format 'dd-MMM-yyyy HH:mm'
+            User            = $AuditData.UserId
+            Operation       = $AuditData.Operation  
+            UserId          = $AuditData.UserKey
+            ChatThreadId    = $AuditData.ChatThreadId
+            MembersAdded    = $AuditData.Members.UPN -join ", "
+            HasForeignTenantUsers = $AuditData.ParticipantInfo.HasForeignTenantUsers
+            ForeignDomain = $ForeignDomain  
+            ForeignTenantId = $ForeignTenantId      
+        }
+        $Report.Add($ReportLine)
+    }
+}
+    
+$Report = $Report | Sort-Object {$_.TimeStamp -as [datetime]} -Descending
+
+$UserId = "59e09287-ac1b-4ff7-80a3-08d0d1eed939"
+$TenantId = (Get-MgOrganization).Id
+$UserInfo = @{}
+$UserData = @{}
+$UserData.Add("id", $UserId)
+$UserData.Add("tenantId", $TenantId)
+$UserInfo.Add("user", $UserData)
+
+$ChatId = "19:110ef7a6-82ac-41c0-b0d1-86d88fc566b6_59e09287-ac1b-4ff7-80a3-08d0d1eed939@unq.gbl.spaces"
+$Uri = ("https://graph.microsoft.com/beta/chats/{0}/removeAllAccessForUser" -f $ChatId)
+
+Try {
+    # Requires Chat.ReadWrite.All permission
+    Remove-MgChatAccessForUser -ChatId $ChatId -BodyParameter $UserInfo -ErrorAction Stop
+    Write-Output ("Removed user access from chat {0}" -f $ChatId)
+} Catch {
+    Write-Error ("Failed to remove user access from chat {0}: {1}" -f $ChatId, $_.Exception.Message)
+}

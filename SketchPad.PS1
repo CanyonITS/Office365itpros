@@ -1896,3 +1896,44 @@ Try {
 } Catch {
     Write-Error ("Failed to remove user access from chat {0}: {1}" -f $ChatId, $_.Exception.Message)
 }
+
+# Code to figure out how the progress team members are making in burning out assigned tasks in Planner.
+If ($List) {
+    $UpdateList = $true
+    # Get list items and load them into a PowerShell list
+    [array]$ListItems = Get-MgSiteListItem -ListId $List.Id -SiteId $Site.Id -ExpandProperty "fields(`$select=id,title,plan,upn,username,Tasks,RunDate,Averagedaysoutstanding,ObjectId)" -PageSize 999 -All
+	
+    $ItemData = [System.Collections.Generic.List[Object]]::new()
+    ForEach ($Item in $ListItems.fields) { 
+    
+        $ReportLine = [PSCustomObject] @{ 
+            Id                     = $Item.Id
+            ItemId                 = $Item.additionalProperties.Title
+            Plan                   = $Item.additionalProperties.Plan
+            UPN                    = $Item.additionalProperties.UPN
+            UserName               = $Item.additionalProperties.Username
+            Tasks                  = $Item.additionalProperties.Tasks
+            Rundate                = $Item.additionalProperties.RunDate
+            Averagedaysoutstanding = $Item.additionalProperties.Averagedaysoutstanding
+            ObjectId               = $Item.additionalProperties.ObjectId
+        }
+        $ItemData.Add($ReportLine)
+    }
+}
+# Processing for individual users
+[array]$UserItems = $ItemData | Where-Object {$_.ObjectId -eq $Id -and $_.Plan -eq 'MAC Tasks'}
+# Add current stats for the user from Planner
+
+$CurrentData = [PSCustomObject] @{ 
+    Title                  = 'new Guid'
+    ItemId                 = '999'
+    Plan                   = $NewItemParameters.Fields['Plan']
+    UPN                    = $NewItemParameters.Fields['UPN']
+    UserName               = $NewItemParameters.Fields['Username']
+    Tasks                  = $NewItemParameters.Fields['Tasks']
+    Rundate                = $NewItemParameters.Fields['RunDate']
+    Averagedaysoutstanding = $NewItemParameters.Fields['Averagedaysoutstanding']
+    ObjectId               = $NewItemParameters.Fields['ObjectId']  
+}
+    
+$UserItems += $CurrentData

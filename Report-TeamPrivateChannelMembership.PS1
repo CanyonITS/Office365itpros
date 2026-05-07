@@ -3,7 +3,7 @@
 
 # Original idea described in https://office365itpros.com/2022/08/16/teams-private-channels-report/
 # This version 7-May-2026
-# GitHub Link:
+# GitHub Link: https://github.com/12Knocksinna/Office365itpros/blob/master/Report-TeamPrivateChannelMembership.PS1
 
 $Modules = Get-Module | Select-Object -ExpandProperty Name
 If ($Modules -notcontains 'MicrosoftTeams') {
@@ -61,6 +61,24 @@ ForEach ($Team in $Teams) {
     }
 } # End ForEach Team
 
+$ChannelsList | Out-GridView -Title "Teams Private Channel Membership Report" 
+
+# Set up to use the ImportExcel module to generate Excel worksheets if it is available. If not, the report will be generated in CSV format instead.
+If (Get-Module ImportExcel -ListAvailable) {
+    $ExcelGenerated = $True
+    Import-Module ImportExcel -ErrorAction SilentlyContinue
+}
+
+# Generate the attachment in either Excel worksheet or CSV format, depending on if the ImportExcel module is available
+If ($ExcelGenerated) {
+    $OutputFile = ((New-Object -ComObject Shell.Application).Namespace('shell:Downloads').Self.Path) + "\TeamsPrivateChannelMembership.xlsx"
+    $ChannelsList | Export-Excel -Path $OutputFile -WorksheetName "PrivateChannelMembership" -Title ("Teams Private Channel Membership {0}" -f (Get-Date -format 'dd-MMM-yyyy')) -TitleBold -TableName "PrivateChannels"         
+} Else {
+    $OutputFile = ((New-Object -ComObject Shell.Application).Namespace('shell:Downloads').Self.Path) + "\TeamsPrivateChannelMembership_$($Id).csv"
+    $ChannelsList | Export-Csv -Path $OutputFile     -NoTypeInformation -Encoding Utf8
+}
+
+Write-Output "Report generated in: $OutputFile" -ForegroundColor Green
 
 # An example script used to illustrate a concept. More information about the topic can be found in the Office 365 for IT Pros eBook https://gum.co/O365IT/
 # and/or a relevant article on https://office365itpros.com or https://www.practical365.com. See our post about the Office 365 for IT Pros repository 

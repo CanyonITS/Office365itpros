@@ -2,8 +2,8 @@
 # A script to report the membership of all Microsoft 365 Groups in a tenant
 # V2.0 16-Jan-2023 Rewritten to remove depenxency on Azure AD and Exchange Online management module and use Microsoft Graph PowerShell SDK
 # V2.1 5-Jul-2025  Use Get-MgUserMemberOf to get group memberships instead of Graph request
-# V2.2 11-May-2026 Use Get-MgUserMemberOfAsGroup instead
-# cmdlets instead.
+# V2.2 11-May-2026 Use Get-MgUserMemberOfAsGroup instead of Get-MgUserMemberOf
+# 
 # https://github.com/12Knocksinna/Office365itpros/blob/master/ReportM365GroupMemberships.PS1
 # https://github.com/12Knocksinna/Office365itpros/blob/master/ReportM365GroupMemberships-Graph.PS1 is a version of this script that uses Graph API requests
 

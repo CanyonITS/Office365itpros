@@ -1,12 +1,12 @@
 # Send-WelcomeMessageWithICS.PS1
 # a script to send a welcome message to new user accounts, cokmplete with an attachment to welcome the new account
 # and one ore more ICS files for upcoming corporate events.
-# Github link:
+# Github link: https://github.com/12Knocksinna/Office365itpros/blob/master/Send-WelcomeMessageWithICS.PS1
 
 # V1.0 12-May-2026
 # Requires the Microsoft Graph PowerShell SDK running in app-only mode with the following permissions:
 # Mail.Send, Organization.Read.All, Calendars.Read, User.Read.All
-#
+# This script is intended to be run as an Azure Automation runbook or in app-only mode in an interactive PowerShell session. 
 
 Function Update-MessageRecipients {
     [cmdletbinding()]
@@ -108,11 +108,16 @@ END:VCALENDAR
 # Start of processing
 
 $Thumbprint = '0CF6CE3F3548FD73E7AC8CF20226ED447E125C71'
-$TenantId = 'b662313f-14fc-43a2-9a7a-d2e27f4f3478'
+$TenantId = 'a662313f-14fc-43a2-9a7a-d2e27f4f3478'
 $AppId = 'dfe6637d-8d2a-4d8f-90eb-c2cbb7479b55'
 
 # Connect in app-only mode
 Connect-MgGraph -ClientId $AppId -TenantId $TenantId -CertificateThumbprint $Thumbprint
+
+# Runbook - connect using a managed identity. Make sure that the automation account has the 
+# necessary permissions and that the required modules like Microsoft.Graph.Authentication, Microsoft.Graph.Calendar,  
+# Microsoft.Graph.Users, and Microsoft.Graph.Users.Actions are added to the runbook environment
+Connect-MgGraph -Identity
 
 # We're going to look for user accounts created in the last week, but you can change this as needed
 $WeekAgo = (Get-Date).AddDays(-7).toString("yyyy-MM-ddTHH:mm:ssZ")    

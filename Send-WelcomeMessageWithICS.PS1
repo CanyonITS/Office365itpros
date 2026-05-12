@@ -71,15 +71,19 @@ function New-IcsEvent {
     $uid    = [guid]::NewGuid().ToString()
     $nowUtc = (Get-Date).ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'")
     $teamsUrl = $EventDetails.TeamsUrl
+    $meetingBody      = "Join the Teams meeting using the link below."
     If ($teamsUrl) {
-        $description = "Microsoft Teams Meeting`n$($teamsUrl)"
+        $description =  "$meetingBody\n\nJoin Teams Meeting: $($teamsURL)"
     } Else {
         $description = "EventDetails.Body"
     }
-    $description = "Microsoft Teams Meeting`n$($teamsUrl)"
+    $description = $description
     $subject = $EventDetails.Subject
     $StartTime = $EventDetails.Start
     $EndTime = $EventDetails.End
+    $OrganizerName = $EventDetails.OrganizerName
+    $OrganizerEmail = $EventDetails.OrganizerEmail
+  
 
 $ics = @"
 BEGIN:VCALENDAR
@@ -93,15 +97,24 @@ DTSTAMP:$nowUtc
 DTSTART:$((Get-Date $StartTime).ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'"))
 DTEND:$((Get-Date $EndTime).ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'"))
 SUMMARY:$($Subject)
-DESCRIPTION:$($description)
-LOCATION:Microsoft Teams
-URL:$($teamsUrl)
+DESCRIPTION:$meetingBody\n\nJoin Teams Meeting: $teamsURL
+LOCATION:Microsoft Teams Meeting
+ORGANIZER;CN=$OrganizerName:MAILTO:$organizerEmail
+X-MICROSOFT-ONLINEMEETINGCONFLINK:$teamsUrl
+X-MS-OLK-CONF-TELURI:$teamsURL
+BEGIN:VALARM
+TRIGGER:-PT15M
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
 END:VEVENT
 END:VCALENDAR
 "@
 
+    $ICS = $ICS -replace "`r?`n", "`r`n"
+
     $Path = ((New-Object -ComObject Shell.Application).Namespace('shell:Downloads').Self.Path) + "\$Uid.ics"
-    $ics | Out-File -Encoding UTF8 -FilePath $Path
+    [System.IO.File]::WriteAllText($Path, $ICS, [System.Text.UTF8Encoding]::new($false))
     Get-Item $Path
 }
 
@@ -204,6 +217,8 @@ If ($Events -and $NoCorporateEvents -eq $False) {
             Body = $ICSEvent.Body.Content
             Description = 'Corporate Event'
             TeamsUrl = $ICSEvent.OnlineMeeting.JoinUrl
+            OrganizerEmail = $ICSEvent.Organizer.EmailAddress.Address
+            OrganizerName = $ICSEvent.Organizer.EmailAddress.Name
         }
         # Create .ics file for the event and add to attachments list
         $NewICS = New-IcsEvent -EventDetails $EventDetails

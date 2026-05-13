@@ -68,54 +68,79 @@ function New-IcsEvent {
         [Parameter(Mandatory)] $EventDetails
     )
 
-    $uid    = [guid]::NewGuid().ToString()
-    $nowUtc = (Get-Date).ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'")
-    $teamsUrl = $EventDetails.TeamsUrl
-    $meetingBody      = "Join the Teams meeting using the link below."
-    If ($teamsUrl) {
-        $description =  "$meetingBody\n\nJoin Teams Meeting: $($teamsURL)"
-    } Else {
-        $description = "EventDetails.Body"
-    }
-    $description = $description
-    $subject = $EventDetails.Subject
-    $StartTime = $EventDetails.Start
-    $EndTime = $EventDetails.End
-    $OrganizerName = $EventDetails.OrganizerName
+    $uid            = [guid]::NewGuid().ToString()
+    $dtStart        = ([DateTime]$EventDetails.Start).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+    $dtEnd          = ([DateTime]$EventDetails.End).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+    $dtStamp        = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+    $teamsUrl       = $EventDetails.TeamsUrl
+    $subject        = $EventDetails.Subject
+    $Organizer      = $EventDetails.OrganizerName
     $OrganizerEmail = $EventDetails.OrganizerEmail
+
+    # Build the Teams description blob exactly as Outlook expects it
+    $description  = "Microsoft Teams meeting\n"
+    $description += "Join on your computer or mobile app\n"
+    $description += "Click here to join the meeting: $teamsUrl\n"
+    If ($meetingId) {
+        $description += "Meeting ID: $meetingId\n"
+    }
+
+    # Audio conferencing details if available
+    If ($EventDetails.audioConferencing) {
+        $dialIn     = $EventDetails.audioConferencing.tollNumber
+        $confId     = $EventDetails.audioConferencing.conferenceId
+        if ($dialIn) { $description += "Dial in (audio only): $dialIn\n" }
+        if ($confId) { $description += "Phone Conference ID: $confId\n" }
+    }
   
+# Build the ICS using the information extracted from the calendar event and online meeting  
+$ICSLines = @(
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//RA//Meeting Scheduler//EN",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    "UID:$uid",
+    "DTSTAMP:$dtStamp",
+    "DTSTART:$dtStart",
+    "DTEND:$dtEnd",
+    (Set-IcsLine "SUMMARY:$subject"),
+    (Set-IcsLine "DESCRIPTION:$description"),
+    "LOCATION:Microsoft Teams Meeting",
+    (Set-IcsLine "X-MICROSOFT-SKYPETEAMSMEETINGURL:$teamsUrl"),
+    (Set-IcsLine "X-MICROSOFT-ONLINEMEETINGCONFLINK:$teamsUrl"),
+    (Set-IcsLine "ORGANIZER;CN=$($Organizer):mailto:$($OrganizerEmail)"),
+    "BEGIN:VALARM",
+    "TRIGGER:-PT15M",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:Reminder",
+    "END:VALARM",
+    "END:VEVENT",
+    "END:VCALENDAR"
+)
+    # Make sure that all lines in the ICS are terminated with a line feed
+    $ICS = [string]::Join("`r`n", $icsLines)
+    $ICS += "`r`n"
 
-$ics = @"
-BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//PowerShell//iCalendar//EN
-CALSCALE:GREGORIAN 
-METHOD:PUBLISH
-BEGIN:VEVENT
-UID:$uid
-DTSTAMP:$nowUtc
-DTSTART:$((Get-Date $StartTime).ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'"))
-DTEND:$((Get-Date $EndTime).ToUniversalTime().ToString("yyyyMMdd'T'HHmmss'Z'"))
-SUMMARY:$($Subject)
-DESCRIPTION:$meetingBody\n\nJoin Teams Meeting: $teamsURL
-LOCATION:Microsoft Teams Meeting
-ORGANIZER;CN=$OrganizerName:MAILTO:$organizerEmail
-X-MICROSOFT-ONLINEMEETINGCONFLINK:$teamsUrl
-X-MS-OLK-CONF-TELURI:$teamsURL
-BEGIN:VALARM
-TRIGGER:-PT15M
-ACTION:DISPLAY
-DESCRIPTION:Reminder
-END:VALARM
-END:VEVENT
-END:VCALENDAR
-"@
-
-    $ICS = $ICS -replace "`r?`n", "`r`n"
-
+    # Create the ICS file
     $Path = ((New-Object -ComObject Shell.Application).Namespace('shell:Downloads').Self.Path) + "\$Uid.ics"
     [System.IO.File]::WriteAllText($Path, $ICS, [System.Text.UTF8Encoding]::new($false))
     Get-Item $Path
+}
+
+
+function Set-IcsLine {
+    param([string]$line)
+    # Line folding function to make sure that the lines in the ICS file do not exceed 75 characters, as per the iCalendar specification. Lines longer than 75 characters are folded by inserting a CRLF followed by a space.
+    if ($line.Length -le 75) { return $line }
+    $result    = $line.Substring(0, 75)
+    $remaining = $line.Substring(75)
+    while ($remaining.Length -gt 0) {
+        $chunk     = if ($remaining.Length -gt 74) { $remaining.Substring(0, 74) } else { $remaining }
+        $result   += "`r`n " + $chunk
+        $remaining = if ($remaining.Length -gt 74) { $remaining.Substring(74) } else { "" }
+    }
+    return $result
 }
 
 # Start of processing
@@ -187,10 +212,10 @@ $HtmlBody = "<body>
 
 # Determine if any calendar events for corporate events should be added to the message. We look for events in the next six weeks.
 # If any events are found, create an .ics file and add it to the attachments list
-$CalendarUser = "Corporate.Events.Meetings@office365itpros.com"
+$CalendarUser = Get-MgUser -UserId "Corporate.Events.Meetings@office365itpros.com"
 Try {
     $NoCorporateEvents = $False
-    $Calendar = Get-MgUserDefaultCalendar -UserId $CalendarUser -ErrorAction Stop
+    $Calendar = Get-MgUserDefaultCalendar -UserId $CalendarUser.Id -ErrorAction Stop
 } Catch {
     Write-Host "Can't find calendar for corporate events" $CalendarUser " - skipping addition of calendar events to message attachments"
     $NoCorporateEvents = $True
@@ -199,7 +224,7 @@ $StartDateTime = (Get-Date).ToString("yyyy-MM-dd")
 $EndDateTime = (Get-Date).AddDays(42).ToString("yyyy-MM-dd")
 
 Try {
-    [array]$Events = Get-MgUserCalendarView -UserId $CalendarUser -CalendarId $Calendar.Id -all `
+    [array]$Events = Get-MgUserCalendarView -UserId $CalendarUser.Id -CalendarId $Calendar.Id -all `
         -EndDateTime $EndDateTime -StartDateTime $StartDateTime -ErrorAction Stop    
 } Catch {
     Write-Host "Error fetching events from corporate events calendar - skipping addition of calendar events to message attachments"
@@ -209,6 +234,13 @@ Try {
 If ($Events -and $NoCorporateEvents -eq $False) {
     Write-Host "Found" $Events.Count "upcoming events in the corporate calendar. Adding to message attachments."
     ForEach ($ICSEvent in $Events) {
+        $EventJoinURL = $ICSEvent.OnlineMeeting.JoinUrl
+        If (!$EventJoinURL) {
+            Write-Host "Event" $ICSEvent.Subject "does not have an online meeting URL - skipping"
+            continue
+        }
+        # Fetch detail of the online meeting
+        $OnlineMeetingInfo = Get-MgUserOnlineMeeting -UserId $CalendarUser.Id -Filter "JoinWebURL eq '$EventJoinURL'" -ErrorAction Stop
         $EventDetails = @{
             Subject = $ICSEvent.Subject
             Start = $ICSEvent.Start.DateTime
@@ -216,16 +248,21 @@ If ($Events -and $NoCorporateEvents -eq $False) {
             Location = $ICSEvent.Location.DisplayName
             Body = $ICSEvent.Body.Content
             Description = 'Corporate Event'
-            TeamsUrl = $ICSEvent.OnlineMeeting.JoinUrl
+            TeamsUrl = $OnlineMeetingInfo.JoinWebUrl
             OrganizerEmail = $ICSEvent.Organizer.EmailAddress.Address
             OrganizerName = $ICSEvent.Organizer.EmailAddress.Name
+            MeetingId  = $OnlineMeetingInfo.videoTeleconferenceId
+            AudioConferencing = @{
+                tollNumber = $OnlineMeetingInfo.AudioConferencing.TollNumber
+                conferenceId = $OnlineMeetingInfo.AudioConferencing.ConferenceId
+            }
         }
         # Create .ics file for the event and add to attachments list
         $NewICS = New-IcsEvent -EventDetails $EventDetails
         $Attachments += $NewICS.VersionInfo.filename
     }   
 }
-
+# Create the array of attachments for the message
 [array]$MsgAttachments = Update-MessageAttachments -ListOfAttachments $Attachments
 
 # Loop through each user to generate and send the welcome message, customizing the content for each user.

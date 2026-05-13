@@ -68,9 +68,16 @@ function New-IcsEvent {
         [Parameter(Mandatory)] $EventDetails
     )
 
+    # Make sure that meeting dates are converted to UTC and formatted as needed for the ICS file
+    $dts =[datetime]$EventDetails.Start
+    $dte =[datetime]$EventDetails.End
+    $tz  = [timeZoneInfo]::FindSystemTimeZoneById($EventDetails.Timezone)
+    $dtso = [DateTimeOffset]::new($dts, $tz.GetUtcOffset($dts))
+    $dtse = [DateTimeOffset]::new($dte, $tz.GetUtcOffset($dte))
+
     $uid            = [guid]::NewGuid().ToString()
-    $dtStart        = ([DateTime]$EventDetails.Start).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
-    $dtEnd          = ([DateTime]$EventDetails.End).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+    $dtStart        = ([DateTime]$dtso.utcDateTime).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+    $dtEnd          = ([DateTime]$dtse.UtcDateTime).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
     $dtStamp        = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
     $teamsUrl       = $EventDetails.TeamsUrl
     $subject        = $EventDetails.Subject
@@ -252,6 +259,7 @@ If ($Events -and $NoCorporateEvents -eq $False) {
             OrganizerEmail = $ICSEvent.Organizer.EmailAddress.Address
             OrganizerName = $ICSEvent.Organizer.EmailAddress.Name
             MeetingId  = $OnlineMeetingInfo.videoTeleconferenceId
+            Timezone = $ICSEvent.Start.TimeZone
             AudioConferencing = @{
                 tollNumber = $OnlineMeetingInfo.AudioConferencing.TollNumber
                 conferenceId = $OnlineMeetingInfo.AudioConferencing.ConferenceId

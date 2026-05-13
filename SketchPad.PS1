@@ -1,6 +1,33 @@
 # SketchPad.PS1
 # Used for bits of PowerShell I am working on or want to note
 
+
+# Add attendees to a meeting
+
+# Define array of new attendees
+[array]$NewAttendees = @()
+# Loop through the users we want to add to the event
+ForEach ($User in $Users) {
+    # Create hash table containing attendee details
+    $NewAttendee = @{
+        EmailAddress = @{
+            Address = $User.Mail
+            Name    = $User.displayName
+        }
+        Type = "optional"   # or "required"
+    }
+    # Add the hash table to the array of new attendees
+    $NewAttendees += $NewAttendee
+}
+
+# Get current attendees for the meeting
+[array]$CurrentAttendees = $Event.Attendees
+# Combine the two arrays
+[array]$UpdatedAttendees = $CurrentAttendees + $NewAttendees
+# Update the meeting
+Update-MgUserEvent -UserId $CalendarUser.Id -EventId $Event.Id -Attendees $UpdatedAttendees
+
+
 # Get list to update metadata for the new item
 $ListId = (Get-MgSiteList -SiteId $Site.Id -Filter "DisplayName eq 'Documents'").Id
 [array]$ListItems = Get-MgSiteListItem -SiteId $Site.Id -ListId $ListId

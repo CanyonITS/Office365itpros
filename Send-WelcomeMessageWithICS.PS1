@@ -138,7 +138,6 @@ $ICSLines = @(
     Get-Item $Path
 }
 
-
 function Set-IcsLine {
     param([string]$line)
     # Line folding function to make sure that the lines in the ICS file do not exceed 75 characters, as per the iCalendar specification. Lines longer than 75 characters are folded by inserting a CRLF followed by a space.
@@ -241,11 +240,13 @@ Try {
     $NoCorporateEvents = $True
 }
 
+# If we have some events, go and process them
 If ($Events -and $NoCorporateEvents -eq $False) {
     Write-Host "Found" $Events.Count "upcoming events in the corporate calendar. Adding to message attachments."
     ForEach ($ICSEvent in $Events) {
         $EventJoinURL = $ICSEvent.OnlineMeeting.JoinUrl
         If (!$EventJoinURL) {
+            # Only interested in online events...
             Write-Host "Event" $ICSEvent.Subject "does not have an online meeting URL - skipping"
             continue
         }

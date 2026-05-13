@@ -5,7 +5,9 @@
 
 # V1.0 12-May-2026
 # Requires the Microsoft Graph PowerShell SDK running in app-only mode with the following permissions:
-# Mail.Send, Organization.Read.All, Calendars.Read, User.Read.All
+# Mail.Send, Organization.Read.All, Calendars.ReadWrite, User.Read.All, and OnlineMeetings.Read.All
+
+# In addition, a Teams application access policy must be created and assigned to the app to allow it to access online meeting information.
 # This script is intended to be run as an Azure Automation runbook or in app-only mode in an interactive PowerShell session. 
 
 Function Update-MessageRecipients {

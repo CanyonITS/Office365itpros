@@ -194,9 +194,7 @@ ForEach ($user in $users) {
     # Customize the message 
     $htmlHeaderUser = "<h2>A Huge Welcome to Our New User " + $User.DisplayName + "</h2>"    
     $HtmlMsg = "</body></html>" + $HtmlHead + $htmlHeaderUser + $HtmlBody + "<p>"
-    If ($NewICS) {
-        $HtmlMsg += "<p>Also, we've included an .ics file for any upcoming corporate events that you might want to attend. Just open each file to add the event to your calendar.</p>"
-    }
+    
     # Construct the message body
     $MsgBody = @{
         Content = "$($HtmlMsg)"

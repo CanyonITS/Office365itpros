@@ -82,7 +82,7 @@ $WeekAgo = (Get-Date).AddDays(-7).toString("yyyy-MM-ddTHH:mm:ssZ")
 # and the user accounts must be licensed for Exchange Online -
 $ExoServicePlan1 = "9aaf7827-d63c-4b61-89c3-182f06f82e5c"
 $ExoServicePlan2 = "efb87545-963c-4e0d-99df-69c6916d9eb0"
-$NewICS = $null
+$NoCorporateEvents = $True
 
 # Find the set of user accounts licensed for Exchange Online created in the last seven days
 [array]$Users = Get-MgUser -Filter "(createddateTime ge $WeekAgo and userType eq 'Member') `

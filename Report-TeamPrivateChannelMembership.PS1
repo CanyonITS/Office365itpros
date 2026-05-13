@@ -19,7 +19,7 @@ If ($Modules -notcontains 'MicrosoftTeams') {
 }
 
 Write-Output "Fetching teams data..." -ForegroundColor Green
-[array]$Teams = Get-Team -ResultSize 5000
+[array]$Teams = Get-Team 
 
 $ChannelsList = [System.Collections.Generic.List[Object]]::new()
 [int]$i = 0

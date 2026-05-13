@@ -83,6 +83,8 @@ function New-IcsEvent {
     $subject        = $EventDetails.Subject
     $Organizer      = $EventDetails.OrganizerName
     $OrganizerEmail = $EventDetails.OrganizerEmail
+    $meetingId       = $EventDetails.MeetingId
+    $MeetingPasscode = $EventDetails.MeetingPasscode
 
     # Build the Teams description blob exactly as Outlook expects it
     $description  = "Microsoft Teams meeting\n"
@@ -90,6 +92,7 @@ function New-IcsEvent {
     $description += "Click here to join the meeting: $teamsUrl\n"
     If ($meetingId) {
         $description += "Meeting ID: $meetingId\n"
+        $description += "Passcode: $MeetingPasscode\n"
     }
 
     # Audio conferencing details if available
@@ -258,7 +261,8 @@ If ($Events -and $NoCorporateEvents -eq $False) {
             TeamsUrl = $OnlineMeetingInfo.JoinWebUrl
             OrganizerEmail = $ICSEvent.Organizer.EmailAddress.Address
             OrganizerName = $ICSEvent.Organizer.EmailAddress.Name
-            MeetingId  = $OnlineMeetingInfo.videoTeleconferenceId
+            MeetingId  = $OnlineMeetingInfo.JoinMeetingIdSettings.JoinMeetingId
+            MeetingPasscode = $OnlineMeetingInfo.JoinMeetingIdSettings.Passcode
             Timezone = $ICSEvent.Start.TimeZone
             AudioConferencing = @{
                 tollNumber = $OnlineMeetingInfo.AudioConferencing.TollNumber

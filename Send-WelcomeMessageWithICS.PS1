@@ -3,6 +3,8 @@
 # and one ore more ICS files for upcoming corporate events.
 # Github link: https://github.com/12Knocksinna/Office365itpros/blob/master/Send-WelcomeMessageWithICS.PS1
 
+# See article at https://office365itpros.com/2026/05/25/online-meeting-ics-files/
+
 # V1.0 12-May-2026
 # Requires the Microsoft Graph PowerShell SDK running in app-only mode with the following permissions:
 # Mail.Send, Organization.Read.All, Calendars.ReadWrite, User.Read.All, and OnlineMeetings.Read.All

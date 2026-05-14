@@ -1,7 +1,7 @@
 # Send-WelcomeMessageWithCalendarEvents.PS1
 # a script to send a welcome message to new user accounts, complete with an attachment to welcome the new account
 # and updating the calendar of the Corporate events mailbox so that the new people get invited to suitable events.
-# Github link: https://github.com/12Knocksinna/Office365itpros/blob/master/Send-WelcomeMessageWithICS.PS1
+# Github link: https://github.com/12Knocksinna/Office365itpros/blob/master/Send-WelcomeMessageWithCalendarEvents.PS1
 
 # V1.0 13-May-2026
 # Requires the Microsoft Graph PowerShell SDK running in app-only mode with the following permissions:

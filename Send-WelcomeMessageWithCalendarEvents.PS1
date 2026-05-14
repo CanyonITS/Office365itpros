@@ -173,7 +173,7 @@ If ($Events -and $NoCorporateEvents -eq $False) {
     ForEach ($Meeting in $Events) {
         # Get current attendees for the meeting
         [array]$CurrentAttendees = $Meeting.Attendees
-        # Combine the two arrays
+        # Combine the arrays of new and existing attendees to create an updated list of attendees for the meeting
         [array]$UpdatedAttendees = $CurrentAttendees + $NewAttendees
         # Update the meeting to add the users as participants
         Try {

@@ -142,23 +142,6 @@ Try {
 $StartDateTime = (Get-Date).ToString("yyyy-MM-dd")
 $EndDateTime = (Get-Date).AddDays(42).ToString("yyyy-MM-dd")
 
-# Define array of new attendees tto add as particopants to the corporate events. 
-# In this example, we're just adding the new users as optional attendees, but you could change this as needed.   
-[array]$NewAttendees = @()
-# Loop through the users we want to add to the event
-ForEach ($User in $Users) {
-    # Create hash table containing attendee details
-    $NewAttendee = @{
-        EmailAddress = @{
-            Address = $User.Mail
-            Name    = $User.displayName
-        }
-        Type = "optional"   # or "required"
-    }
-    # Add the hash table to the array of new attendees
-    $NewAttendees += $NewAttendee
-}
-
 Try {
     [array]$Events = Get-MgUserCalendarView -UserId $CalendarUser.Id -CalendarId $Calendar.Id -all `
         -EndDateTime $EndDateTime -StartDateTime $StartDateTime -ErrorAction Stop    
@@ -170,6 +153,22 @@ Try {
 # If we have some events, go and process them
 If ($Events -and $NoCorporateEvents -eq $False) {
     Write-Host "Found" $Events.Count "upcoming events in the corporate calendar. Adding users as meeting participants."
+    # Define array of new attendees to add as participants to the corporate events. 
+    # In this example, we're just adding the new users as optional attendees, but you could change this as needed.   
+    [array]$NewAttendees = @()
+    # Loop through the users we want to add to the event
+    ForEach ($User in $Users) {
+        # Create hash table containing attendee details
+        $NewAttendee = @{
+            EmailAddress = @{
+                Address = $User.Mail
+                Name    = $User.displayName
+            }
+            Type = "optional"   # or "required"
+        }
+        # Add the hash table to the array of new attendees
+        $NewAttendees += $NewAttendee
+    }
     ForEach ($Meeting in $Events) {
         # Get current attendees for the meeting
         [array]$CurrentAttendees = $Meeting.Attendees
@@ -177,13 +176,13 @@ If ($Events -and $NoCorporateEvents -eq $False) {
         [array]$UpdatedAttendees = $CurrentAttendees + $NewAttendees
         # Update the meeting to add the users as participants
         Try {
-            Update-MgUserEvent -UserId $CalendarUser.Id -EventId $Meeting.Id -Attendees $UpdatedAttendees -ErrorAction Stop
+            $Status = Update-MgUserEvent -UserId $CalendarUser.Id -EventId $Meeting.Id -Attendees $UpdatedAttendees -ErrorAction Stop
         } Catch {
             Write-Host "Error updating meeting" $Meeting.Subject ":" $_.Exception.Message
         }   
     }   
 }
-# Create the array of attachments for the message
+# Create the attachments for the message
 [array]$MsgAttachments = Update-MessageAttachments -ListOfAttachments $Attachments
 
 # Loop through each user to generate and send the welcome message, customizing the content for each user.

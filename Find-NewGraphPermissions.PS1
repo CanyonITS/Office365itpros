@@ -68,10 +68,6 @@ If (-Not (Test-Path -Path "C:\Temp" -PathType Container)) {
     }
 }
 
-# Delete old download files if they exist
-Remove-Item -Path "C:\Temp\OutputAppRoles.csv" -ErrorAction SilentlyContinue
-Remove-Item -Path "C:\Temp\OutputOauthScopes.csv" -ErrorAction SilentlyContinue
-
 # Download the App Roles and OAuth Scopes files from the SharePoint site to the local machine for comparison. First get file properties
 # because we want to display the information and need the item identifier to upload a new version if there are changes. 
 
@@ -80,33 +76,67 @@ $FolderName = "The Base of All Good in Office 365"
 $OldAppRolesFileName = "OutputAppRoles.csv"
 $OldOauthScopesFileName = "OutputOauthScopes.csv"
 
+# Get details of the previous comparison files from SharePoint. We need the item identifiers to download and upload
+# files later
 $Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderName, $OldAppRolesFileName)
-$AppRolesItem = Invoke-MgGraphRequest -Uri $Uri -Method GET -ErrorAction Stop
-
-$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderName, $OldAppRolesFileName)
 Try {
-    Invoke-MgGraphRequest -Uri $Uri -Method GET -OutputFilePath "C:\Temp\OutputAppRoles.csv" -ErrorAction Stop
+    $AppRolesItem = Invoke-MgGraphRequest -Uri $Uri -Method GET -ErrorAction Stop
 } Catch {
-    Write-Error "Failed to download OutputAppRoles.csv: $_"
+    Write-Error "Failed to retrieve previous App Roles item: $_"
     Return
 }
 
 $Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderName, $OldOauthScopesFileName)
-$OauthScopesItem = Invoke-MgGraphRequest -Uri $Uri -Method GET -ErrorAction Stop
-
-$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderName, $OldOauthScopesFileName)
 Try {
-    Invoke-MgGraphRequest -Uri $Uri -Method GET -OutputFilePath "C:\Temp\OutputOauthScopes.csv" -ErrorAction Stop
+    $OauthScopesItem = Invoke-MgGraphRequest -Uri $Uri -Method GET -ErrorAction Stop
 } Catch {
-    Write-Error "Failed to download OutputOauthScopes.csv: $_"
+    Write-Error "Failed to retrieve previous OAuth Scopes item: $_"
     Return
+}
+
+# Define where to download the previous comparison files to on the local machine. The script will overwrite any existing files in this location.
+$LocalDownloadPath = "C:\Temp"
+$LocalAppRolesFileName = Join-Path -Path $LocalDownloadPath -ChildPath $OldAppRolesFileName
+$LocalOauthScopesFileName = Join-Path -Path $LocalDownloadPath -ChildPath $OldOauthScopesFileName
+# Remove old files if they exist before downloading new ones
+Remove-Item -Path $LocalAppRolesFileName -ErrorAction SilentlyContinue
+Remove-Item -Path $LocalOauthScopesFileName -ErrorAction SilentlyContinue
+
+# Get Graph app roles
+$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderName, $OldAppRolesFileName)
+Try {
+    Get-MgDriveItemContent -DriveId $Drive.Id -DriveItemId $AppRolesItem.Id -OutFile $LocalAppRolesFileName -ErrorAction Stop
+    # Alternatively, you can use Invoke-MgGraphRequest to download the file content
+    # Invoke-MgGraphRequest -Uri $Uri -Method GET -OutputFilePath $LocalAppRolesFileName -ErrorAction Stop
+} Catch { # handle error noted in https://github.com/microsoftgraph/msgraph-sdk-powershell/issues/3105
+    If ($_.Exception.Message -like "Cannot set percent because PercentComplete cannot be greater than 100*") {
+        # Ignore this specific error
+    } Else {
+        Write-Error "Failed to download OutputAppRoles.csv: $_"
+        Return
+    }
+}
+
+# Get Graph OAuth scopes
+$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderName, $OldOauthScopesFileName)
+Try { 
+    Get-MgDriveItemContent -DriveId $Drive.Id -DriveItemId $OauthScopesItem.Id -OutFile $LocalOauthScopesFileName -ErrorAction Stop
+    # Alternatively, you can use Invoke-MgGraphRequest to download the file content
+    # Invoke-MgGraphRequest -Uri $Uri -Method GET -OutputFilePath $LocalOauthScopesFileName -ErrorAction Stop
+} Catch {
+    If ($_.Exception.Message -like "Cannot set percent because PercentComplete cannot be greater than 100*") {
+        # Ignore this specific error
+    } Else {
+        Write-Error "Failed to download OutputOauthScopes.csv: $_"
+        Return
+    }
 }
 
 Write-Output ("Importing files with information about Graph roles dated {0}" -f (Get-Date $AppRolesItem.lastModifiedDateTime -format "dd-MMM-yyyy HH:mm:ss"))
 
 # Import into arrays for comparison
-[array]$OldAppRoles = Import-Csv -Path "C:\Temp\OutputAppRoles.csv"
-[array]$OldOauthScopes = Import-Csv -Path "C:\Temp\OutputOauthScopes.csv"
+[array]$OldAppRoles = Import-Csv -Path $LocalAppRolesFileName
+[array]$OldOauthScopes = Import-Csv -Path $LocalOauthScopesFileName
 
 # Find if any new app roles have been added since the last comparison
 $NewAppRoles = Compare-Object -ReferenceObject $OldAppRoles -DifferenceObject $AppRoles -Property Value, DisplayName, Id -PassThru | Where-Object { $_.SideIndicator -eq "=>" }

@@ -17,20 +17,48 @@
 
 Connect-MgGraph -Scopes "Application.Read.All", "Sites.Read.All", "Files.ReadWrite.All" -NoWelcome
 
+# Change this for the values of the folder in the SharePoint site where the previous comparison files are stored and
+# the names of the files that hold the last data extracted for Graph app roles and OAuth scopes.
+$FolderPath = "The Base of All Good in Office 365"
+$CurrentAppRolesFileName = "CurrentAppRoles.csv"
+$CurrentOauthScopesFileName = "CurrentOauthScopes.csv"
+$NewAppRolesFileName = "NewAppRoles.csv"
+$NewOauthScopesFileName = "NewOauthScopes.csv"
+    
+# Define the folder where to download the previous comparison files to for the local machine. The script will overwrite any existing files in this location.
+$LocalDownloadPath = "C:\Temp"
+
+# Make sure that the local folder exists
+If (-Not (Test-Path -Path "C:\Temp" -PathType Container)) {
+    Try {
+        New-Item -Path "C:\Temp" -ItemType Directory -ErrorAction Stop | Out-Null
+    } Catch {
+        Write-Error "Failed to create C:\Temp directory: $_"
+        Return
+    }
+}
+
+# Full full names for the local copies of the files downloaded from SharePoint Online
+$LocalAppRolesFileName = Join-Path -Path $LocalDownloadPath -ChildPath $CurrentAppRolesFileName
+$LocalOauthScopesFileName = Join-Path -Path $LocalDownloadPath -ChildPath $CurrentOauthScopesFileName
+
+# Create CSV file names for the files to hold the current Graph App Roles and OAuth scopes data created from the Graph app
+$OutputAppRolesCsv = Join-Path -Path $LocalDownloadPath -ChildPath $NewAppRolesFileName
+$OutputOauthScopesCsv = Join-Path -Path $LocalDownloadPath -ChildPath $NewOauthScopesFileName
+
+# Remove old files if they exist before downloading new ones
+Remove-Item -Path $LocalAppRolesFileName -ErrorAction SilentlyContinue
+Remove-Item -Path $LocalOauthScopesFileName -ErrorAction SilentlyContinue
+Remove-Item -Path $OutputAppRolesCsv -ErrorAction SilentlyContinue
+Remove-Item -Path $OutputOauthScopesCsv -ErrorAction SilentlyContinue
+
 Write-Output "Checking Microsoft Graph permissions for new app roles and OAuth scopes..."
 # Get Graph service principal
 $GraphSp = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
 
+# Create and export arrays of information from the Graph
 [array]$AppRoles = $GraphSp.AppRoles | Select-Object Value, DisplayName, Id
 [array]$OauthScopes = $GraphSp.Oauth2PermissionScopes | Select-Object Value, AdminConsentDisplayName, Id
-    
-# Create CSV file names for the current Graph App Roles and OAuth scopes in the Downloads folder
-$OutputAppRolesCsv = ((New-Object -ComObject Shell.Application).Namespace('shell:Downloads').Self.Path) + "\OutputAppRoles.csv"
-$OutputOauthScopesCsv = ((New-Object -ComObject Shell.Application).Namespace('shell:Downloads').Self.Path) + "\OutputOauthScopes.csv"
-
-# Remove any existing files before exporting new data
-Remove-Item -Path $OutputAppRolesCsv -ErrorAction SilentlyContinue
-Remove-Item -Path $OutputOauthScopesCsv -ErrorAction SilentlyContinue
 $AppRoles | Export-Csv -Path $OutputAppRolesCsv -NoTypeInformation -Encoding UTF8
 $OauthScopes | Export-Csv -Path $OutputOauthScopesCsv -NoTypeInformation -Encoding UTF8
 
@@ -68,17 +96,9 @@ If (-Not (Test-Path -Path "C:\Temp" -PathType Container)) {
     }
 }
 
-# Download the App Roles and OAuth Scopes files from the SharePoint site to the local machine for comparison. First get file properties
-# because we want to display the information and need the item identifier to upload a new version if there are changes. 
-
-# Change this for the folder in the SharePoint site where the previous comparison files are stored.
-$FolderPath = "The Base of All Good in Office 365"
-$OldAppRolesFileName = "OutputAppRoles.csv"
-$OldOauthScopesFileName = "OutputOauthScopes.csv"
-
 # Get properties of the previous comparison files from SharePoint. We need the item identifiers to download and upload
 # files later
-$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderPath, $OldAppRolesFileName)
+$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderPath, $CurrentAppRolesFileName)
 Try {
     $AppRolesItem = Invoke-MgGraphRequest -Uri $Uri -Method GET -ErrorAction Stop
 } Catch {
@@ -86,7 +106,7 @@ Try {
     Return
 }
 
-$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderPath, $OldOauthScopesFileName)
+$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderPath, $CurrentOauthScopesFileName)
 Try {
     $OauthScopesItem = Invoke-MgGraphRequest -Uri $Uri -Method GET -ErrorAction Stop
 } Catch {
@@ -191,11 +211,15 @@ $ToRecipient.Add("emailAddress",@{'address'=$DestinationEmailAddress})
 # Define the message subject
 $MsgSubject = "Important: New Graph Permissions Detected in Your Tenant - Action Required"
 # Create the HTML content
-$HtmlMsg = "</body></html><p>The following <b>New Graph permissions have been detected in your tenant</b> based on the latest comparison.</p>" 
-$HtmlMsg += "<h3>New Graph App Roles</h3>"
-$HtmlMsg += $NewAppRolesHtml
-$HtmlMsg += "<h3>New Graph OAuth Scopes</h3>"
-$HtmlMsg += $NewOauthScopesHtml
+$HtmlMsg = "</body></html><p>The following <b>changes to available Graph permissions have been detected in your tenant</b> based on the latest comparison.</p>" 
+If ($NewAppRoles) {
+    $HtmlMsg += "<h3>New Graph App Roles ($($NewAppRoles.count))</h3>"
+    $HtmlMsg += $NewAppRolesHtml
+}
+If ($NewOAuthScopes) {
+    $HtmlMsg += "<h3>New Graph OAuth Scopes ($($NewOauthScopes.count))</h3>"
+    $HtmlMsg += $NewOauthScopesHtml
+}
 $HtmlMsg += "<p>Please review the capabilities of the new permissions and take any necessary actions to update applications to ensure the security of the tenant.</p></body></html>"
 
 $MsgBody = @{}

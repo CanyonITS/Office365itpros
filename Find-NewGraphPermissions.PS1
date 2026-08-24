@@ -72,13 +72,13 @@ If (-Not (Test-Path -Path "C:\Temp" -PathType Container)) {
 # because we want to display the information and need the item identifier to upload a new version if there are changes. 
 
 # Change this for the folder in the SharePoint site where the previous comparison files are stored.
-$FolderName = "The Base of All Good in Office 365"
+$FolderPath = "The Base of All Good in Office 365"
 $OldAppRolesFileName = "OutputAppRoles.csv"
 $OldOauthScopesFileName = "OutputOauthScopes.csv"
 
 # Get details of the previous comparison files from SharePoint. We need the item identifiers to download and upload
 # files later
-$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderName, $OldAppRolesFileName)
+$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderPath, $OldAppRolesFileName)
 Try {
     $AppRolesItem = Invoke-MgGraphRequest -Uri $Uri -Method GET -ErrorAction Stop
 } Catch {
@@ -86,7 +86,7 @@ Try {
     Return
 }
 
-$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderName, $OldOauthScopesFileName)
+$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderPath, $OldOauthScopesFileName)
 Try {
     $OauthScopesItem = Invoke-MgGraphRequest -Uri $Uri -Method GET -ErrorAction Stop
 } Catch {
@@ -103,7 +103,7 @@ Remove-Item -Path $LocalAppRolesFileName -ErrorAction SilentlyContinue
 Remove-Item -Path $LocalOauthScopesFileName -ErrorAction SilentlyContinue
 
 # Get Graph app roles
-$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderName, $OldAppRolesFileName)
+$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderPath, $OldAppRolesFileName)
 Try {
     Get-MgDriveItemContent -DriveId $Drive.Id -DriveItemId $AppRolesItem.Id -OutFile $LocalAppRolesFileName -ErrorAction Stop
     # Alternatively, you can use Invoke-MgGraphRequest to download the file content
@@ -118,7 +118,7 @@ Try {
 }
 
 # Get Graph OAuth scopes
-$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderName, $OldOauthScopesFileName)
+$Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderPath, $OldOauthScopesFileName)
 Try { 
     Get-MgDriveItemContent -DriveId $Drive.Id -DriveItemId $OauthScopesItem.Id -OutFile $LocalOauthScopesFileName -ErrorAction Stop
     # Alternatively, you can use Invoke-MgGraphRequest to download the file content
@@ -194,7 +194,7 @@ $HtmlMsg += "<h3>New Graph App Roles</h3>"
 $HtmlMsg += $NewAppRolesHtml
 $HtmlMsg += "<h3>New Graph OAuth Scopes</h3>"
 $HtmlMsg += $NewOauthScopesHtml
-$HtmlMsg += "<p>Please review these new permissions and take any necessary actions to ensure your tenant's security and compliance.</p></body></html>"
+$HtmlMsg += "<p>Please review the capabbilities of the new permissions and take any necessary actions to update applications to ensure the security of the tenant.</p></body></html>"
 
 $MsgBody = @{}
 $MsgBody.Add('Content', "$($HtmlMsg)")

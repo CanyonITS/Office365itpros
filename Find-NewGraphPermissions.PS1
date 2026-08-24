@@ -196,7 +196,7 @@ $HtmlMsg += "<h3>New Graph App Roles</h3>"
 $HtmlMsg += $NewAppRolesHtml
 $HtmlMsg += "<h3>New Graph OAuth Scopes</h3>"
 $HtmlMsg += $NewOauthScopesHtml
-$HtmlMsg += "<p>Please review the capabbilities of the new permissions and take any necessary actions to update applications to ensure the security of the tenant.</p></body></html>"
+$HtmlMsg += "<p>Please review the capabilities of the new permissions and take any necessary actions to update applications to ensure the security of the tenant.</p></body></html>"
 
 $MsgBody = @{}
 $MsgBody.Add('Content', "$($HtmlMsg)")

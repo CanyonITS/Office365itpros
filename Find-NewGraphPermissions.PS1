@@ -86,16 +86,6 @@ Try {
     Return
 }    
 
-# Make sure that c:\temp exists
-If (-Not (Test-Path -Path "C:\Temp" -PathType Container)) {
-    Try {
-        New-Item -Path "C:\Temp" -ItemType Directory -ErrorAction Stop | Out-Null
-    } Catch {
-        Write-Error "Failed to create C:\Temp directory: $_"
-        Return
-    }
-}
-
 # Get properties of the previous comparison files from SharePoint. We need the item identifiers to download and upload
 # files later
 $Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderPath, $CurrentAppRolesFileName)
@@ -113,14 +103,6 @@ Try {
     Write-Error "Failed to retrieve previous OAuth Scopes item: $_"
     Return
 }
-
-# Define where to download the previous comparison files to on the local machine. The script will overwrite any existing files in this location.
-$LocalDownloadPath = "C:\Temp"
-$LocalAppRolesFileName = Join-Path -Path $LocalDownloadPath -ChildPath $OldAppRolesFileName
-$LocalOauthScopesFileName = Join-Path -Path $LocalDownloadPath -ChildPath $OldOauthScopesFileName
-# Remove old files if they exist before downloading new ones
-Remove-Item -Path $LocalAppRolesFileName -ErrorAction SilentlyContinue
-Remove-Item -Path $LocalOauthScopesFileName -ErrorAction SilentlyContinue
 
 # Get content of the file holding the last set of recorded Graph app roles
 # This line is only needed if you want to download the file content with a Graph API request
@@ -154,7 +136,7 @@ Try {
     }
 }
 
-Write-Output ("Importing files with information about Graph roles dated {0}" -f (Get-Date $AppRolesItem.lastModifiedDateTime -format "dd-MMM-yyyy HH:mm:ss"))
+Write-Output ("Preparing to compare current Graph data with information about Graph permissions and scopes dated {0}" -f (Get-Date $AppRolesItem.lastModifiedDateTime -format "dd-MMM-yyyy HH:mm:ss"))
 
 # Import into arrays for comparison
 [array]$OldAppRoles = Import-Csv -Path $LocalAppRolesFileName
@@ -178,7 +160,7 @@ If ($NewAppRoles.Count -gt 0 -or $NewOauthScopes.Count -gt 0) {
 If ($NewAppRoles.Count -gt 0) {
     Try {
         Set-MgDriveItemContent -DriveId $Drive.Id -DriveItemId $AppRolesItem.Id -InFile $OutputAppRolesCsv -ErrorAction Stop | Out-Null
-        Write-Output "Updated OutputAppRoles.csv in SharePoint site"
+        Write-Output "Updated New app role information in SharePoint site"
     } Catch {
         Write-Error "Failed to update OutputAppRoles.csv in SharePoint site: $_"
         Return
@@ -188,6 +170,7 @@ If ($NewAppRoles.Count -gt 0) {
 If ($NewOauthScopes.Count -gt 0) {
     Try {
         Set-MgDriveItemContent -DriveId $Drive.Id -DriveItemId $OauthScopesItem.Id -InFile $OutputOauthScopesCsv -ErrorAction Stop | Out-Null
+        Write-Output "Updated New Oauth scopes information in SharePoint site"
     } Catch {
         Write-Error "Failed to update OutputOauthScopes.csv in SharePoint site: $_"
         Return

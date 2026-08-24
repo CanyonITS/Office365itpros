@@ -40,7 +40,7 @@ Write-Output ("Graph OAuth Scopes: " + $OauthScopes.Count)
 # Change the SharePoint site URL to match whatever site is used to hold the previous comparison files. The site must be accessible to the
 # signed-in account running the script (not a problem for app-only or Azure Automation).
 Write-Host "Fetching data from previous comparison from SharePoint site..."
-$Uri = "https://redmondassociates.sharepoint.com/sites/O365ExchPro"
+$Uri = "https://office365itpros.sharepoint.com/sites/O365ExchPro"
 $SiteId = $Uri.Split('//')[1].split("/")[0] + ":/sites/" + $Uri.Split('//')[1].split("/")[2]
 
 # Get site and default document library
@@ -76,7 +76,7 @@ $FolderPath = "The Base of All Good in Office 365"
 $OldAppRolesFileName = "OutputAppRoles.csv"
 $OldOauthScopesFileName = "OutputOauthScopes.csv"
 
-# Get details of the previous comparison files from SharePoint. We need the item identifiers to download and upload
+# Get properties of the previous comparison files from SharePoint. We need the item identifiers to download and upload
 # files later
 $Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderPath, $OldAppRolesFileName)
 Try {
@@ -102,7 +102,8 @@ $LocalOauthScopesFileName = Join-Path -Path $LocalDownloadPath -ChildPath $OldOa
 Remove-Item -Path $LocalAppRolesFileName -ErrorAction SilentlyContinue
 Remove-Item -Path $LocalOauthScopesFileName -ErrorAction SilentlyContinue
 
-# Get Graph app roles
+# Get content of the file holding the last set of recorded Graph app roles
+# This line is only needed if you want to download the file content with a Graph API request
 $Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderPath, $OldAppRolesFileName)
 Try {
     Get-MgDriveItemContent -DriveId $Drive.Id -DriveItemId $AppRolesItem.Id -OutFile $LocalAppRolesFileName -ErrorAction Stop
@@ -117,7 +118,8 @@ Try {
     }
 }
 
-# Get Graph OAuth scopes
+# Get content of the file holding the last set of recorded Graph OAuth scopes
+# Again, this line is only needed if you want to download the file content with a Graph API request
 $Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderPath, $OldOauthScopesFileName)
 Try { 
     Get-MgDriveItemContent -DriveId $Drive.Id -DriveItemId $OauthScopesItem.Id -OutFile $LocalOauthScopesFileName -ErrorAction Stop

@@ -67,7 +67,7 @@ Write-Output ("Graph OAuth Scopes: " + $OauthScopes.Count)
 
 # Change the SharePoint site URL to match whatever site is used to hold the previous comparison files. The site must be accessible to the
 # signed-in account running the script (not a problem for app-only or Azure Automation).
-Write-Host "Fetching data from previous comparison from SharePoint site..."
+Write-Information "Fetching data from previous comparison from SharePoint site..."
 $Uri = "https://office365itpros.sharepoint.com/sites/O365ExchPro"
 $SiteId = $Uri.Split('//')[1].split("/")[0] + ":/sites/" + $Uri.Split('//')[1].split("/")[2]
 

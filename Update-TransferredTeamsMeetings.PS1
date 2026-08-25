@@ -11,6 +11,7 @@
 
 # V1.0 6-Aug-2026
 # GitHub link: https://github.com/12Knocksinna/Office365itpros/blob/master/Update-TransferredTeamsMeetings.PS1
+# Article link: https://office365itpros.com/2026/08/25/teams-meeting-transfer/
 
 # The input is a CSV file containing the following columns:
 # Subject
@@ -49,17 +50,17 @@ function Get-UtcEventTime {
 # Test do we have a valid input file to process?
 # $TransferInputFile = "c:\temp\Transferred Teams Meetings.csv"TransferInputFile = "c:\temp\Transferred Teams Meetings.csv"
 If (-not (Test-Path $TransferInputFile)) {
-    Write-Host ("The input file '{0}' does not exist. Please provide a valid CSV file." -f $TransferInputFile) -ForegroundColor Red
+    Write-Error ("The input file '{0}' does not exist. Please provide a valid CSV file." -f $TransferInputFile) 
     return
 }   
 
 # Input the data and see if we have any meetings to process.
 [array]$InputMeetings = Import-Csv -Path $TransferInputFile
 If (-not $InputMeetings) {
-    Write-Host ("The input file '{0}' does not contain any data. Please provide a valid CSV file." -f $TransferInputFile) -ForegroundColor Red
+    Write-Error ("The input file '{0}' does not contain any data. Please provide a valid CSV file." -f $TransferInputFile) 
     return
 }   Else {
-    Write-Host ("The input file '{0}' contains {1} meetings to be updated." -f $TransferInputFile, $InputMeetings.Count) -ForegroundColor Green
+    Write-Output ("The input file '{0}' contains {1} meetings to be updated." -f $TransferInputFile, $InputMeetings.Count) 
 }
 
 $AppId = '03ef5d75-e8dd-4f9e-a71c-fa81939d5ca2' # Replace with your Entra ID app IDcd
@@ -67,7 +68,7 @@ $Thumbprint = "0CF6CE3F3548FD73E7AC8CF20226ED447E125C71" # Replace with your cer
 $TenantId = "a662313f-14fc-43a2-9a7a-d2e27f4f3478" # Replace with your tenant ID
 
 # Connect to the Microsoft Graph in app-only mode
-Write-Host "Connecting to Microsoft Graph..."
+Write-Output "Connecting to Microsoft Graph..."
 Connect-MgGraph -ClientId $AppId -TenantId $TenantId -CertificateThumbprint $Thumbprint -NoWelcome
 
 # Do we have a valid target mailbox?
@@ -75,7 +76,7 @@ $TargetMailbox = $InputMeetings | Select-Object -ExpandProperty NewOrganizer | S
 Try {
     $TargetMailboxDetails = Get-MgUser -UserId $TargetMailbox -ErrorAction Stop
 } Catch {
-    Write-Host ("The target mailbox '{0}' does not exist or is not a user mailbox. Please provide a valid target mailbox." -f $TargetMailbox) -ForegroundColor Red
+    Write-Error ("The target mailbox '{0}' does not exist or is not a user mailbox. Please provide a valid target mailbox." -f $TargetMailbox) 
     return
 }
 
@@ -94,9 +95,9 @@ ForEach ($Item in $InputMeetings) {
     [array]$Events = Get-MgUserDefaultCalendarEvent -UserId $TargetMailboxDetails.Id -Filter "start/datetime ge '$SearchDateStart' and end/datetime le '$SearchDateEnd' and subject eq '$EventSubject'"
     If ($Events.Count -eq 1) {
         $CalendarEvent = $Events[0]
-        Write-Host ("Found target event '{0}' on {1} for update." -f $CalendarEvent.Subject, (Get-Date $CalendarEvent.Start.DateTime -format 'dd-MMM-yyyy HH:mm')) -ForegroundColor Green
+        Write-Output ("Found target event '{0}' on {1} for update." -f $CalendarEvent.Subject, (Get-Date $CalendarEvent.Start.DateTime -format 'dd-MMM-yyyy HH:mm'))
     } Else {
-        Write-Host ("{0} matching events found. We cannot update the meeting." -f $Events.count)
+        Write-Output ("{0} matching events found. We cannot update the meeting." -f $Events.count)
         Continue
     }
 
@@ -113,7 +114,7 @@ ForEach ($Item in $InputMeetings) {
     Try {
         $Status = Update-MgUserEvent -EventId $CalendarEvent.Id -UserId $TargetMailboxDetails.Id -BodyParameter $EventDetails -ErrorAction Stop
     } Catch {
-        Write-Host ("Error removing old Teams join information from event '{0}': {1}" -f $CalendarEvent.Subject, $_.Exception.Message) -ForegroundColor Red
+        Write-Error ("Error removing old Teams join information from event '{0}': {1}" -f $CalendarEvent.Subject, $_.Exception.Message)
         Continue
     }
     
@@ -132,7 +133,7 @@ ForEach ($Item in $InputMeetings) {
     Try {
         $onlineMeeting = New-MgUserOnlineMeeting -UserId $TargetMailboxDetails.Id -BodyParameter $OnlineMeetingBody -ErrorAction Stop
     } Catch {
-        Write-Host ("Error creating online meeting for event '{0}': {1}" -f $CalendarEvent.Subject, $_.Exception.Message) -ForegroundColor Red
+        Write-Error ("Error creating online meeting for event '{0}': {1}" -f $CalendarEvent.Subject, $_.Exception.Message)
         Continue
     }
    
@@ -170,12 +171,12 @@ ForEach ($Item in $InputMeetings) {
     Try {
         $Status = Update-MgUserEvent -EventId $CalendarEvent.Id -UserId $TargetMailboxDetails.Id -BodyParameter $EventDetails -ErrorAction Stop
         If ($Status) {
-            Write-Host ("Successfully updated event '{0}' with new Teams meeting information." -f $CalendarEvent.Subject) -ForegroundColor Green
+            Write-Output ("Successfully updated event '{0}' with new Teams meeting information." -f $CalendarEvent.Subject)
         } Else {
-            Write-Host ("Failed to update event '{0}' with new Teams meeting information." -f $CalendarEvent.Subject) -ForegroundColor Red
+            Write-Error ("Failed to update event '{0}' with new Teams meeting information." -f $CalendarEvent.Subject)
         }   
     } Catch {
-        Write-Host ("Error updating event '{0}': {1}" -f $CalendarEvent.Subject, $_.Exception.Message) -ForegroundColor Red
+        Write-Error ("Error updating event '{0}': {1}" -f $CalendarEvent.Subject, $_.Exception.Message)
         Continue
     }   
 
@@ -200,7 +201,7 @@ ForEach ($Item in $InputMeetings) {
         Try {
             $Status = Update-MgUserEvent -EventId $CalendarEvent.Id -UserId $TargetMailboxDetails.Id -BodyParameter $EventDetails -ErrorAction Stop
         } Catch {
-            Write-Host ("Error performing post processing of Teams information for event '{0}': {1}" -f $CalendarEvent.Subject, $_.Exception.Message) -ForegroundColor Red
+            Write-Error ("Error performing post processing of Teams information for event '{0}': {1}" -f $CalendarEvent.Subject, $_.Exception.Message)
             Continue
         }
     }

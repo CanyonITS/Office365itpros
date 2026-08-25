@@ -1,6 +1,9 @@
 # Report-LoopWorkSpaces.PS1
 # Example script to show how to report Loop workspaces, including pagination when there are more than 200 workspaces in the tenant
 # https://github.com/12Knocksinna/Office365itpros/blob/master/Report-LoopWorkspaces.PS1
+
+# Link to article: https://office365itpros.com/2024/04/08/loop-workspaces-report-ps/
+
 # V1.0 23-Nov-2023
 # V1.1 29-March-2024
 # V1.2 24-Jul-2024
@@ -12,20 +15,20 @@ Connect-MgGraph -NoWelcome -Scopes Organization.Read.All
 [array]$Domains = (Get-MgOrganization).verifiedDomains
 $DefaultDomain = $Domains | Where-Object {$_.IsDefault -eq $true}
 $SPOAdminRoot = ("https://{0}-admin.sharepoint.com" -f $DefaultDomain.Name.split('.')[0])
-Write-Information "Connecting to SharePoint Online..."
+Write-Output "Connecting to SharePoint Online..."
 Import-Module Microsoft.Online.SharePoint.PowerShell -UseWindowsPowerShell
 Connect-SPOService -Url $SPOAdminRoot
 If (Get-SPOTenant) {
-    Write-Information ("Connected to SharePoint Online at {0}" -f $SPOAdminRoot)
+    Write-Output ("Connected to SharePoint Online at {0}" -f $SPOAdminRoot)
 } Else {
-    Write-Information "Failed to connect to SharePoint Online"
+    Write-Output "Failed to connect to SharePoint Online"
     Break
 }
 
-Write-Information "Looking for Loop workspaces..."
+Write-Output "Looking for Loop workspaces..."
 [array]$LoopWorkspaces = Get-SPOContainer -OwningApplicationID a187e399-0c36-4b98-8f04-1edc167a0996 -Paged
 If (!($LoopWorkspaces)) {
-    Write-Information "Can't get Loop workspaces - exiting"; break
+    Write-Output "Can't get Loop workspaces - exiting"; break
 }
 
 # Figure out if there are more than 200 workspaces.
@@ -36,7 +39,7 @@ If ($LoopWorkspaces[200]) {
     # Remove the last item in the array because it's the one that contains the token
     $LoopWorkspaces = $LoopWorkspaces[0..199]
 }
-Write-Information "Token for next page found - retrieving more workspaces..."
+Write-Output "Token for next page found - retrieving more workspaces..."
 While ($Token) {
     # Loop while we can get a token for the next page of workspaces
     [array]$NextSetofWorkSpaces = Get-SPOContainer -OwningApplicationID a187e399-0c36-4b98-8f04-1edc167a0996 `
@@ -53,7 +56,7 @@ While ($Token) {
     }
     $LoopWorkspaces += $NextSetofWorkspaces
 }
-Write-Information ("{0} Loop workspaces found" -f $LoopWorkspaces.count)
+Write-Output ("{0} Loop workspaces found" -f $LoopWorkspaces.count)
 
 $CSVOutputFile = "C:\temp\LoopWorkSpaces.CSV"
 $LoopServicePlan = 'c4b8c31a-fb44-4c65-9837-a21f55fcabda'
@@ -73,7 +76,7 @@ $Report = [System.Collections.Generic.List[Object]]::new()
 $TotalBytes = 0; $LicenseOK = 0; $i = 0
 ForEach ($LoopSpace in $LoopWorkspaces) {
     $i++
-    Write-Information ("Analyzing workspace {0} {1}/{2}" -f $LoopSpace.ContainerName, $i, $LoopWorkspaces.count)
+    Write-Output ("Analyzing workspace {0} {1}/{2}" -f $LoopSpace.ContainerName, $i, $LoopWorkspaces.count)
     # Get detail of the workspace
     $LoopSpaceDetails =  Get-SPOContainer -Identity $LoopSpace.ContainerId
     # Get detail about the owner

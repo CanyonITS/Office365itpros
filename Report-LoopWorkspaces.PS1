@@ -6,26 +6,26 @@
 # V1.2 24-Jul-2024
 
 # Connect to the Graph
-Connect-MgGraph -NoWelcome -Scopes Directory.Read.All
+Connect-MgGraph -NoWelcome -Scopes Organization.Read.All
 
 # Connect to SharePoint Online
 [array]$Domains = (Get-MgOrganization).verifiedDomains
 $DefaultDomain = $Domains | Where-Object {$_.IsDefault -eq $true}
 $SPOAdminRoot = ("https://{0}-admin.sharepoint.com" -f $DefaultDomain.Name.split('.')[0])
-Write-Host "Connecting to SharePoint Online..."
+Write-Information "Connecting to SharePoint Online..."
 Import-Module Microsoft.Online.SharePoint.PowerShell -UseWindowsPowerShell
 Connect-SPOService -Url $SPOAdminRoot
 If (Get-SPOTenant) {
-    Write-Host ("Connected to SharePoint Online at {0}" -f $SPOAdminRoot)
+    Write-Information ("Connected to SharePoint Online at {0}" -f $SPOAdminRoot)
 } Else {
-    Write-Host "Failed to connect to SharePoint Online"
+    Write-Information "Failed to connect to SharePoint Online"
     Break
 }
 
-Write-Host "Looking for Loop workspaces..."
+Write-Information "Looking for Loop workspaces..."
 [array]$LoopWorkspaces = Get-SPOContainer -OwningApplicationID a187e399-0c36-4b98-8f04-1edc167a0996 -Paged
 If (!($LoopWorkspaces)) {
-    Write-Host "Can't get Loop workspaces - exiting"; break
+    Write-Information "Can't get Loop workspaces - exiting"; break
 }
 
 # Figure out if there are more than 200 workspaces.
@@ -36,7 +36,7 @@ If ($LoopWorkspaces[200]) {
     # Remove the last item in the array because it's the one that contains the token
     $LoopWorkspaces = $LoopWorkspaces[0..199]
 }
-Write-Host "Token for next page found - retrieving more workspaces..."
+Write-Information "Token for next page found - retrieving more workspaces..."
 While ($Token) {
     # Loop while we can get a token for the next page of workspaces
     [array]$NextSetofWorkSpaces = Get-SPOContainer -OwningApplicationID a187e399-0c36-4b98-8f04-1edc167a0996 `
@@ -46,14 +46,14 @@ While ($Token) {
         $NextSetofWorkspaces = $NextSetofWorkspaces[0..199]
     } Else {
         $Token = $Null
-        If (($NextSetofWorkSpaces[$NextSetofWorkspaces.count -1]) -eq "End of containers view.") {  
+        If (($NextSetofWorkSpaces[$NextSetofWorkspaces.count -1]) -eq "End of containers view.") {
             # Remove the last item in the array because it contains the message "End of containers view."
             $NextSetofWorkspaces = $NextSetofWorkspaces[0..($NextSetofWorkspaces.count -2)]
-        }             
+        }            
     }
     $LoopWorkspaces += $NextSetofWorkspaces
-} 
-Write-Host ("{0} Loop workspaces found" -f $LoopWorkspaces.count)
+}
+Write-Information ("{0} Loop workspaces found" -f $LoopWorkspaces.count)
 
 $CSVOutputFile = "C:\temp\LoopWorkSpaces.CSV"
 $LoopServicePlan = 'c4b8c31a-fb44-4c65-9837-a21f55fcabda'
@@ -73,7 +73,7 @@ $Report = [System.Collections.Generic.List[Object]]::new()
 $TotalBytes = 0; $LicenseOK = 0; $i = 0
 ForEach ($LoopSpace in $LoopWorkspaces) {
     $i++
-    Write-Output ("Analyzing workspace {0} {1}/{2}" -f $LoopSpace.ContainerName, $i, $LoopWorkspaces.count)
+    Write-Information ("Analyzing workspace {0} {1}/{2}" -f $LoopSpace.ContainerName, $i, $LoopWorkspaces.count)
     # Get detail of the workspace
     $LoopSpaceDetails =  Get-SPOContainer -Identity $LoopSpace.ContainerId
     # Get detail about the owner
@@ -101,11 +101,11 @@ ForEach ($LoopSpace in $LoopWorkspaces) {
                     If ($LicenseFound) {
                         $LicenseName = $LicenseFound
                     }
-                }           
+                }        
             } Catch {
-                Write-Host ("Unable to find user {0} - skipping" -f $Owner) -ForegroundColor Red
+                Write-Error ("Unable to find user {0} - skipping" -f $Owner) 
                 Continue
-            } 
+            }
         }
     } Else {
         $Members = "Microsoft 365 Group"
@@ -125,7 +125,6 @@ ForEach ($LoopSpace in $LoopWorkspaces) {
         } Catch {
             Continue # Probably a group that the Get-SPOContainer doesn't report yet
         }
-   
     }
 
     $StorageUsed = "{0:N2}" -f ($LoopSpaceDetails.StorageUsedInBytes/1MB)
@@ -149,7 +148,7 @@ ForEach ($LoopSpace in $LoopWorkspaces) {
     $Report.Add($ReportLine)
 }
 
-$Report | Out-GridView -Title "Details of Loop Workspaces" 
+$Report | Out-GridView -Title "Details of Loop Workspaces"
 $Users = $Report | Select-Object Owner, License | Sort-Object Owner -Unique
 $Report | Export-CSV -NoTypeInformation $CSVOutputFile
 
@@ -163,8 +162,8 @@ $Users | Sort-Object License
 Write-Output ""
 Write-Output ("Details can be found in the CSV file {0}" -f $CSVOutputFile)
 
-# An example script used to illustrate a concept. More information about the topic can be found in the Office 365 for IT Pros eBook https://gum.co/O365IT/
-# and/or a relevant article on https://office365itpros.com or https://www.practical365.com. See our post about the Office 365 for IT Pros repository # https://office365itpros.com/office-365-github-repository/ for information about the scripts we write.
+# An example script used to illustrate a concept. More information about the topic can be found in the Microsoft 365 for IT Pros eBook https://gum.co/O365IT/
+# and/or a relevant article on https://office365itpros.com or https://www.practical365.com. See our post about the Microsoft 365 for IT Pros repository # https://office365itpros.com/office-365-github-repository/ for information about the scripts we write.
 
 # Do not use our scripts in production until you are satisfied that the code meets the needs of your organization. Never run any code downloaded from the Internet without
 # first validating the code in a non-production environment.

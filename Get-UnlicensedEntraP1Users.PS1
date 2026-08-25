@@ -86,6 +86,7 @@ $Report = [System.Collections.Generic.List[object]]::new()
 [array]$TotalUsersFound = $null
 
 ForEach ($Policy in $Policies) {
+    $Groups = $null
     [array]$PolicyIncludedUsers = $Policy.Conditions.Users.IncludeUsers
     [array]$PolicyExcludedUsers = $Policy.Conditions.Users.ExcludeUsers
 
@@ -228,4 +229,4 @@ If ($ExcelGenerated) {
 # and/or a relevant article on https://office365itpros.com or https://www.practical365.com. See our post about the Microsoft 365 for IT Pros repository # https://office365itpros.com/office-365-github-repository/ for information about the scripts we write.
 
 # Do not use our scripts in production until you are satisfied that the code meets the need of your organization. Never run any code downloaded from the Internet without
-# first validating the code in a non-production environment.
+# first validating the code in a non-production envir

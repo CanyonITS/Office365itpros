@@ -24,7 +24,7 @@ Function Get-RoleMembers {
         [array]$RoleMembers = $null
         $RoleId = Get-MgDirectoryRole -Filter "RoleTemplateId eq '$Role'" | Select-Object -ExpandProperty Id
         Try {
-            $Status = [array]$RoleMembers = Get-MgDirectoryRoleMember -DirectoryRoleId $RoleId -All -ErrorAction Stop | Select-Object -ExpandProperty Id
+            [array]$RoleMembers = Get-MgDirectoryRoleMember -DirectoryRoleId $RoleId -All -ErrorAction Stop | Select-Object -ExpandProperty Id
             $AllRoleMembers += $RoleMembers
         } Catch {
             # Error is propbably because a role is not used in the tenant, so don't worry about it
@@ -50,7 +50,9 @@ function Get-GroupMembers {
         Try {
             [array]$GroupMembers = Get-MgGroupTransitiveMemberAsUser -GroupId $GroupId -All -ErrorAction Stop | Select-Object -ExpandProperty Id
             $AllGroupMembers += $GroupMembers
-            Write-Host ("Policy includes the {0} group with {1} members" -f (Get-MgGroup -GroupId $GroupId).DisplayName, $GroupMembers.Count) -ForegroundColor White
+            $GroupDisplayName = (Get-MgGroup -GroupId $GroupId).DisplayName
+            Write-Host ("Policy includes the {0} group with {1} members" -f $GroupDisplayName, $GroupMembers.Count) -ForegroundColor White
+            $GroupDisplayNames += $GroupDisplayName
         } Catch {
             Write-Host ("Error fetching members of group {0}: {1}" -f $GroupId, $_.Exception.Message) -ForegroundColor Red
             Continue
@@ -58,7 +60,14 @@ function Get-GroupMembers {
     }
 
     $AllGroupMembers = $AllGroupMembers | Sort-Object -Unique
-    return $AllGroupMembers
+    $GroupDisplayNames = $GroupDisplayNames | Sort-Object -Unique
+    $GroupDisplayNamesOutput = $GroupDisplayNames -join ", "
+    
+    Write-Host ("Total of {0} unique member users found in the included groups: {1}" -f $AllGroupMembers.Count, ($GroupDisplayNames -join ", ")) -ForegroundColor Yellow
+    return [PSCustomObject]@{
+        Members           = $AllGroupMembers
+        GroupDisplayNames = $GroupDisplayNames -join ", "
+    }
 }
 
 Connect-MgGraph -Scopes "Policy.Read.All", "User.ReadBasic.All", "GroupMember.Read.All" -NoWelcome
@@ -79,7 +88,6 @@ $Report = [System.Collections.Generic.List[object]]::new()
 ForEach ($Policy in $Policies) {
     [array]$PolicyIncludedUsers = $Policy.Conditions.Users.IncludeUsers
     [array]$PolicyExcludedUsers = $Policy.Conditions.Users.ExcludeUsers
-    $Groups = $null
 
     Write-Host ("Processing policy {0}" -f $Policy.DisplayName) -ForegroundColor Green
 
@@ -106,18 +114,23 @@ ForEach ($Policy in $Policies) {
         Write-Host ("Member users in scope: {0}" -f $UsersInScope) -ForegroundColor Yellow
 
     } Else { # Policy focuses on specific groups, users, or directory roles
+        $AllRoleMembers = $null
+        $AllGroupMembers = $null
         If ($Policy.Conditions.Users.IncludeGroups) {
             [array]$AllGroupMembers = $null
-            $AllGroupMembers = Get-GroupMembers -Groups $Policy.Conditions.Users.IncludeGroups  
+            [array]$Global:GroupDisplayNamesOutput = $null
+            $AllGroupMembers = Get-GroupMembers -Groups $Policy.Conditions.Users.IncludeGroups 
+            $Groups = $AllGroupMembers.GroupDisplayNames
+            $AllGroupMembers = $AllGroupMembers.Members 
         }
         [array]$IncludedRoles = $Policy.Conditions.Users.IncludeRoles
         If ($IncludedRoles) {
             [array]$AllRoleMembers = $null
             $AllRoleMembers = Get-RoleMembers -Roles $IncludedRoles
         }
-
-        # Add users to the overall set of users
-        [array]$IncludedUserIds = $PolicyIncludedUsers | Where-Object { $_ -notin $IncludedGroupUserIds }   
+      
+        # Add group members to the overall set of users
+        [array]$IncludedUserIds = $PolicyIncludedUsers | Where-Object { $_ -notin $AllGroupMembers }   
         If ($AllGroupMembers) {
             [array]$IncludedUserIds += $AllGroupMembers
         }
@@ -135,7 +148,7 @@ ForEach ($Policy in $Policies) {
         PolicyName      = $Policy.DisplayName
         UsersInScope    = $IncludedUserIds.Count
         UserIds         = $IncludedUserIds
-        Groups          = $Groups -join ", "
+        Groups          = $Groups
     }
     $Report.Add($ReportLine) 
 }

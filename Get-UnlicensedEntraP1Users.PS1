@@ -61,7 +61,6 @@ function Get-GroupMembers {
 
     $AllGroupMembers = $AllGroupMembers | Sort-Object -Unique
     $GroupDisplayNames = $GroupDisplayNames | Sort-Object -Unique
-    $GroupDisplayNamesOutput = $GroupDisplayNames -join ", "
     
     Write-Output ("Total of {0} unique member users found in the included groups: {1}" -f $AllGroupMembers.Count, ($GroupDisplayNames -join ", ")) -ForegroundColor Yellow
     return [PSCustomObject]@{

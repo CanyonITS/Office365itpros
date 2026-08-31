@@ -3,6 +3,7 @@
 
 # V1.0 22-June-2026
 # GitHub Link: https://github.com/12Knocksinna/Office365itpros/blob/master/Get-OpenPlannerTasksAnalysis.PS1
+# Article: https://office365itpros.com/2026/08/11/open-tasks-report/
 
 # The signed-in account must have access to the SharePoint site and list. The script uses Microsoft Graph PowerShell SDK to connect and retrieve data.
 # Alternatively, use app-only authentication to access the SharePoint site and list with application permissions.

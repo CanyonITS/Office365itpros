@@ -2,6 +2,7 @@
 
 # V1.0 21-Aug-2026
 # GitHub Link: https://github.com/12Knocksinna/Office365itpros/blob/master/Find-NewGraphPermissions.PS1
+# Article: https://office365itpros.com/2026/08/31/new-graph-permissions-check/
 
 # Check the app roles defined for the Graph application and compare them to previous permissions. The input file for the comparison is
 # generated from the current set of Graph permissions. It is checked against files from the previous run that are stored in SharePoint Online.

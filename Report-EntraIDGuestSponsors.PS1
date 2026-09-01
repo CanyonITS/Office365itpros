@@ -3,10 +3,11 @@
 
 # V1.0 15-Apr-2025
 # GitHub link: https://github.com/12Knocksinna/Office365itpros/blob/master/Report-EntraIDGuestSponsors.PS1
+# Article link: https://office365itpros.com/2025/04/18/guest-accounts-sponsors/
 
-Connect-MgGraph -NoWelcome -Scopes User.ReadWrite.All
+Connect-MgGraph -NoWelcome -Scopes User.Read.All
 
-[int]$Threshold = 500
+[int]$Threshold = 365 # number of days to check for a guest account that hasn't signed in
 
 Write-Host "Finding guest accounts to analyze..." -ForegroundColor Green
 [array]$Guests = Get-MgUser -Filter "userType eq 'Guest'" -All `
@@ -51,11 +52,11 @@ $Report | Out-GridView -Title "Entra ID Guest Account Sponsors"
 # List all the guest accounts (and their sponsors) that haven't signed in for more than the threshold number of days
 $OldGuests = $Report | Where-Object {$_.'Days Since Sign In' -as [int] -gt $Threshold}
 Write-Host ""
-Write-Host ("The following guest accounts have not signed in for more than {0}} days:" -f $Threshold) -ForegroundColor Red
+Write-Host ("The following guest accounts have not signed in for more than {0} days" -f $Threshold) -ForegroundColor Red
 Write-Host ""
 $OldGuests | Format-Table Name, 'Sponsor Names', 'Days Since Sign In', 'Last Sign In' -AutoSize
 
-# An example script used to illustrate a concept. More information about the topic can be found in the Office 365 for IT Pros eBook https://gum.co/O365IT/
+# An example script used to illustrate a concept. More information about the topic can be found in the Microsoft 365 for IT Pros eBook https://gum.co/O365IT/
 # and/or a relevant article on https://office365itpros.com or https://www.practical365.com. See our post about the Office 365 for IT Pros repository 
 # https://office365itpros.com/office-365-github-repository/ for information about the scripts we write.
 

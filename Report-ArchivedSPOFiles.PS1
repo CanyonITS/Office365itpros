@@ -10,8 +10,6 @@
 # V1.0 2-Sept-2026
 # GitHub Link:
 
-Connect-MgGraph -Scopes "Sites.Read.All" -Nowelcome
-
 function Get-SPOSiteDetails {
     param (
         [string]$SiteUrl
@@ -127,6 +125,7 @@ function Get-DriveItems {
         }
         
         $ReportLine = [PSCustomObject]@{
+            Site                    = $SiteName
             FileName                = $File.Name
             Folder                  = $File.parentreference.name
             Size                    = (FormatFileSize $File.Size)
@@ -136,7 +135,6 @@ function Get-DriveItems {
             'Last modified by'      = $File.LastModifiedBy.User.DisplayName
             SizeInBytes             = $File.Size
             ArchiveStatus           = $File.File.ArchiveStatus
-            WebURL                  = $File.WebUrl
         }
         $ReportData.Add($ReportLine)
     }
@@ -148,18 +146,61 @@ function Get-DriveItems {
     }
 }
 
+# Start of processing
+# This is the code for app-only authentication. The permissions needed are
+# Sites.Read.All and Group.Read.All. The app must be registered in Entra ID and the certificate uploaded to the app.
+# registration. The script uses the certificate to authenticate to Microsoft Graph. Amend the values for $AppId
+# $TenantId and $CertificateThumbprint to match your app registration.
 
-$SiteUri = "https://redmondassociates.sharepoint.com/sites/O365ExchPro"
-$SiteDetails = Get-SPOSiteDetails -SiteUrl $SiteUri
+$AppId = 'd4c18027-cb9c-4983-b2d8-8ba6a5e753e7'
+$TenantId = 'b662313f-14fc-43a2-9a7a-d2e27f4f3478'
+$CertificateThumbprint = '8D225839321765FE6D224D393CDE5A61A45CD846'
+Connect-MgGraph -NoWelcome -AppId $AppId -TenantId $TenantId -CertificateThumbprint $CertificateThumbprint
 
-Write-Output ("Processing site: {0}..." -f $SiteDetails.Site.DisplayName)
-$SiteId = $SiteDetails.Site.Id
-$DriveId = $SiteDetails.Drive.Id
-$RootId = (Get-MgDriveRoot -DriveId $DriveId).Id
+# Find the Microsoft 365 groups in the tenant. We use the groups to find the associated SharePoint Online sites.
+# The script will then check each site for archived files.
 
 $Global:ReportData = [System.Collections.Generic.List[Object]]::new()
-[array]$ArchivedFiles = Get-DriveItems -DriveId $DriveId -FolderId $RootId
+Try {
+    [array]$Groups = Get-MgGroup -Filter "groupTypes/any(c:c eq 'unified')" -All -ErrorAction Stop
+} Catch {
+    Write-Error "Failed to retrieve Microsoft 365 groups: $_"
+    Return
+}
 
+$Groups = $Groups | Sort-Object DisplayName
+Write-Output ("{0} Microsoft 365 groups found" -f $Groups.Count)
+
+ForEach ($Group in $Groups) {
+    Write-Output ("Processing group: {0}..." -f $Group.DisplayName)
+    $Uri = ('https://graph.microsoft.com/v1.0/groups/{0}/sites/root' -f $Group.Id)
+    Try {
+        $GroupSite = Invoke-MgGraphRequest -Uri $Uri -Method Get -OutputType PsObject -ErrorAction Stop
+    } Catch {
+        Write-Error "Failed to retrieve site for group $($Group.DisplayName): $_"
+        Continue
+    }  
+    $SiteId = $GroupSite.Id
+    Try {
+        # Get default document library (drive) for the site.
+        $Drive = Get-MgSiteDefaultDrive -SiteId $SiteId -ErrorAction Stop
+    } Catch {
+        Write-Error "Failed to retrieve default drive for site $($GroupSite.DisplayName): $_"
+        Continue
+    }
+    $DriveId = $Drive.Id
+    $Global:SiteName = $GroupSite.displayName
+    Try {
+        $RootId = Get-MgDriveRoot -DriveId $DriveId -ErrorAction Stop
+    } Catch {
+        Write-Error "Failed to retrieve root folder for drive $($Drive.Name): $_"
+        Continue
+    }
+    $RootId = $RootId.Id
+    [array]$ArchivedFiles = Get-DriveItems -DriveId $DriveId -FolderId $RootId
+}
+
+# Now analyze the results and output a report of the archived files found in the Microsoft 365 groups.
 
 # An example script used to illustrate a concept. More information about the topic can be found in the Microsoft 365 for IT Pros eBook https://gum.co/O365IT/
 # and/or a relevant article on https://office365itpros.com or https://www.practical365.com. See our post about the Office 365 for IT Pros repository 

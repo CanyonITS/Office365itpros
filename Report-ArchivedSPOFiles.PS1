@@ -5,13 +5,19 @@
 # including the file name, path, and the date it was archived.
 
 # Needs to be run with an account or Azure Automation account that has access to the target SharePoint Online 
-# sites.
+# sites. Given the number of files that might be checked, best to use an Azure Automation runbook with a managed identity that has access to the sites. The script uses Microsoft Graph PowerShell SDK to connect and retrieve data.
+
+# V1.0 2-Sept-2026
+# GitHub Link:
+
 Connect-MgGraph -Scopes "Sites.Read.All" -Nowelcome
 
 function Get-SPOSiteDetails {
     param (
         [string]$SiteUrl
     )
+
+    # Function to take a SharePoint Online site URL and return the site and its default document library (drive) details. The function uses Microsoft Graph to retrieve the information.
 
     $SiteId = $SiteUrl.Split('//')[1].split("/")[0] + ":/sites/" + $SiteUrl.Split('//')[1].split("/")[2]
     $Site = Get-MgSite -SiteId $SiteId
@@ -76,11 +82,37 @@ function Get-DriveItems {
 
     # Get data for a folder and its children - Get-MgDriveItemChild doesn't return the archive status currently
     $Uri = ("https://graph.microsoft.com/V1.0/drives/{0}/items/{1}/children" -f $DriveId, $FolderId)
-    [array]$Data = Invoke-MgGraphRequest -Uri $Uri -Method Get -OutputType PsObject | Select-Object -ExpandProperty Value
-    [array]$Folders = $Data | Where-Object {$_.folder.childcount -gt 0} | Sort-Object Name
+    Try {
+        [array]$Data = Invoke-MgGraphRequest -Uri $Uri -Method Get -OutputType PsObject 
+    } Catch {
+        Write-Error "Failed to retrieve drive items: $_"
+        Return
+    }
+
+    If ($Data.'@odata.nextlink') {
+        # More data needs to be retrieved, so get the next page of data
+        $NextLink = $Data.'@odata.nextlink'
+        $FolderData = $Data.Value
+        While ($NextLink) {
+            Try {
+                [array]$NextData = Invoke-MgGraphRequest -Uri $NextLink -Method Get -OutputType PsObject 
+            } Catch {
+                Write-Error "Failed to retrieve next page of drive items: $_"
+                Return
+            }
+            $FolderData += $NextData.Value
+            $NextLink = $NextData.'@odata.nextlink'
+        }
+    } Else {
+        $FolderData = $Data.Value
+    }
+
+    [array]$Folders = $FolderData | Where-Object {$_.folder.childcount -gt 0} | Sort-Object Name
     $Global:TotalFolders = $TotalFolders + $Folders.Count
-    [array]$ArchivedFiles = $Data | Where-Object {$null -ne $_.file.mimetype -and $null -ne $_.file.archiveStatus}
-    #[array]$Data = Get-MgDriveItemChild -DriveId $Drive -DriveItemId $FolderId -All
+    [array]$ArchivedFiles = $FolderData | Where-Object {$null -ne $_.file.mimetype -and $null -ne $_.file.archiveStatus}
+    
+    # Equivalent Graph SDK cmdlet when the SDK is updated (last checked with V2.39)
+    # [array]$Data = Get-MgDriveItemChild -DriveId $Drive -DriveItemId $FolderId -All
 
     # Process the files
     ForEach ($File in $ArchivedFiles) {  
@@ -112,13 +144,13 @@ function Get-DriveItems {
     # Process the child folders found in the root
     ForEach ($Folder in $Folders) {
         Write-Host ("Processing folder {0} ({1} files/size {2})" -f $Folder.Name, $Folder.folder.childcount, (FormatFileSize $Folder.Size))
-        Get-DriveItems -Drive $DriveId -FolderId $Folder.Id
+        Get-DriveItems -DriveId $DriveId -FolderId $Folder.Id
     }
 }
 
 
-$Uri = "https://redmondassociates.sharepoint.com/sites/O365ExchPro"
-$SiteDetails = Get-SPOSiteDetails -SiteUrl $Uri
+$SiteUri = "https://redmondassociates.sharepoint.com/sites/O365ExchPro"
+$SiteDetails = Get-SPOSiteDetails -SiteUrl $SiteUri
 
 Write-Output ("Processing site: {0}..." -f $SiteDetails.Site.DisplayName)
 $SiteId = $SiteDetails.Site.Id
@@ -126,7 +158,7 @@ $DriveId = $SiteDetails.Drive.Id
 $RootId = (Get-MgDriveRoot -DriveId $DriveId).Id
 
 $Global:ReportData = [System.Collections.Generic.List[Object]]::new()
-[array]$ArchivedFiles = Get-DriveItems -Drive $DriveId -FolderId $RootId
+[array]$ArchivedFiles = Get-DriveItems -DriveId $DriveId -FolderId $RootId
 
 
 # An example script used to illustrate a concept. More information about the topic can be found in the Microsoft 365 for IT Pros eBook https://gum.co/O365IT/

@@ -10,17 +10,19 @@
 # V1.0 2-Sept-2026
 # GitHub Link:
 
-function Get-SPOSiteDetails {
-    param (
-        [string]$SiteUrl
-    )
+function Get-SPOArchivedSites {
+   
+    # Function to download a CSV file containg a list of archived sites from a SharePoint site.
+    # Amend these values for your tenant.
 
-    # Function to take a SharePoint Online site URL and return the site and its default document library (drive) details. The function uses Microsoft Graph to retrieve the information.
+    Write-Information "Fetching data about archived sites from SharePoint site..."
+    $ArchivedSitesFileName = "ArchivedSites.csv"
+    $FolderPath = "The Base of All Good in Office 365"
+   
+    $Uri = "https://redmondassociates.sharepoint.com/sites/O365ExchPro"
+    $SiteId = $Uri.Split('//')[1].split("/")[0] + ":/sites/" + $Uri.Split('//')[1].split("/")[2]
 
-    $SiteId = $SiteUrl.Split('//')[1].split("/")[0] + ":/sites/" + $SiteUrl.Split('//')[1].split("/")[2]
-    $Site = Get-MgSite -SiteId $SiteId
-
-    # Get site
+    # Get site and default document library
     Try {
         $Site = Get-MgSite -SiteId $SiteId -ErrorAction Stop
     } Catch {
@@ -33,12 +35,41 @@ function Get-SPOSiteDetails {
     } Catch {
         Write-Error "Failed to retrieve default document library: $_"
         Return
-    }    
-    return [PSCustomObject]@{
-        Site  = $Site
-        Drive = $Drive
     }
 
+    # Get the drive item identifier for the file containing the archived sites list.
+    $Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderPath, $ArchivedSitesFileName)
+    Try {
+        $ArchivedSitesItem = Invoke-MgGraphRequest -Uri $Uri -Method GET -ErrorAction Stop
+    } Catch {
+        Write-Error "Failed to retrieve previous Archived Sites item: $_"
+        Return
+    }
+
+    Remove-Item $ArchivedSitesFileName -ErrorAction SilentlyContinue
+
+    $Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderPath, $ArchivedSitesFileName)
+    Try {
+        Get-MgDriveItemContent -DriveId $Drive.Id -DriveItemId $ArchivedSitesItem.id -OutFile $ArchivedSitesFileName -ErrorAction Stop
+        # Alternatively, you can use Invoke-MgGraphRequest to download the file content
+        # Invoke-MgGraphRequest -Uri $Uri -Method GET -OutputFilePath $ArchivedSitesFileName -ErrorAction Stop
+    } Catch { # handle error noted in https://github.com/microsoftgraph/msgraph-sdk-powershell/issues/3105
+        If ($_.Exception.Message -like "Cannot set percent because PercentComplete cannot be greater than 100*") {
+            # Ignore this specific error
+        } Else {
+            Write-Error "Failed to download ArchivedSites.csv: $_"
+            Return
+        }
+    }
+
+    [array]$ArchivedSites = Import-Csv -Path $ArchivedSitesFileName
+    Write-Information ("{0} archived sites found" -f $ArchivedSites.Count)
+    # Populate a hash table for fast lookup of archived sites
+    $Global:ArchivedSitesHash = @{}
+    ForEach ($Site in $ArchivedSites) {
+        $Global:ArchivedSitesHash.Add($Site.URL, $Site.SiteId)
+    }
+    return $Global:ArchivedSitesHash
 }
 
 function FormatFileSize {
@@ -79,6 +110,9 @@ function Get-DriveItems {
     # all folders in the library. The function returns a list of archived files found in the library.
 
     # Get data for a folder and its children - Get-MgDriveItemChild doesn't return the archive status currently
+    # Equivalent Graph SDK cmdlet when the SDK is updated (last checked with V2.39)
+    # [array]$Data = Get-MgDriveItemChild -DriveId $Drive -DriveItemId $FolderId -All
+
     $Uri = ("https://graph.microsoft.com/V1.0/drives/{0}/items/{1}/children" -f $DriveId, $FolderId)
     Try {
         [array]$Data = Invoke-MgGraphRequest -Uri $Uri -Method Get -OutputType PsObject 
@@ -106,12 +140,10 @@ function Get-DriveItems {
     }
 
     [array]$Folders = $FolderData | Where-Object {$_.folder.childcount -gt 0} | Sort-Object Name
-    $Global:TotalFolders = $TotalFolders + $Folders.Count
+    $Global:TotalFolders = $Global:TotalFolders + $Folders.Count
+    $Global:TotalFiles = $Global:TotalFiles + ($FolderData.Count - $Folders.Count)
     [array]$ArchivedFiles = $FolderData | Where-Object {$null -ne $_.file.mimetype -and $null -ne $_.file.archiveStatus}
     
-    # Equivalent Graph SDK cmdlet when the SDK is updated (last checked with V2.39)
-    # [array]$Data = Get-MgDriveItemChild -DriveId $Drive -DriveItemId $FolderId -All
-
     # Process the files
     ForEach ($File in $ArchivedFiles) {  
 
@@ -139,7 +171,7 @@ function Get-DriveItems {
         $ReportData.Add($ReportLine)
     }
 
-    # Process the child folders found in the root
+    # Process the child folders 
     ForEach ($Folder in $Folders) {
         Write-Host ("Processing folder {0} ({1} files/size {2})" -f $Folder.Name, $Folder.folder.childcount, (FormatFileSize $Folder.Size))
         Get-DriveItems -DriveId $DriveId -FolderId $Folder.Id
@@ -159,7 +191,6 @@ Connect-MgGraph -NoWelcome -AppId $AppId -TenantId $TenantId -CertificateThumbpr
 
 # Find the Microsoft 365 groups in the tenant. We use the groups to find the associated SharePoint Online sites.
 # The script will then check each site for archived files.
-
 $Global:ReportData = [System.Collections.Generic.List[Object]]::new()
 Try {
     [array]$Groups = Get-MgGroup -Filter "groupTypes/any(c:c eq 'unified')" -All -ErrorAction Stop
@@ -173,19 +204,18 @@ Write-Output ("{0} Microsoft 365 groups found" -f $Groups.Count)
 
 ForEach ($Group in $Groups) {
     Write-Output ("Processing group: {0}..." -f $Group.DisplayName)
-    # $Uri = ('https://graph.microsoft.com/v1.0/groups/{0}/sites/root' -f $Group.Id)
     Try {
-        # $GroupSite = Invoke-MgGraphRequest -Uri $Uri -Method Get -OutputType PsObject -ErrorAction Stop
+    # $GroupSite = Invoke-MgGraphRequest -Uri $Uri -Method Get -OutputType PsObject -ErrorAction Stop
         $GroupSite = Get-MgGroupSite -GroupId $Group.Id -SiteId 'root' -ErrorAction Stop
     } Catch {
-        Write-Error "Failed to retrieve site for group $($Group.DisplayName): $_"
+        $ErrorMessage = $_.Exception.Message
+        If ($ErrorMessage -match "notAllowed") {
+            Write-Warning "Site is archived or otherwise blocked: $SiteId"
+        } Else {
+            Write-Warning ("Error {0}: {1}" -f $_.Exception.ResponseStatusCode, $_.Exception.Message)
+    }
         Continue
-    }  
-
-    # Should check here to find if the site is archived. There is an archivalDetails property defined for
-    # site collections https://learn.microsoft.com/en-us/graph/api/resources/sitecollection?view=graph-rest-1.0 
-    # but it doesn't seem to be implemented by the Get Site API https://learn.microsoft.com/en-us/graph/api/site-get?view=graph-rest-1.0&tabs=http
-    # The alternative is to use Get-SPOSite to fetch the archive status, but that means loading another module...
+    }
 
     $SiteId = $GroupSite.Id
     Try {
@@ -206,6 +236,18 @@ ForEach ($Group in $Groups) {
     $RootId = $RootId.Id
     [array]$ArchivedFiles = Get-DriveItems -DriveId $DriveId -FolderId $RootId
 }
+
+# Generate some statistics
+$TotalArchivedFilesSize = ($Global:ReportData | Measure-Object -Property SizeInBytes -Sum).Sum
+$StorageSavingsBytes = ($TotalArchivedFilesSize / 4)*3
+$StorageSavings = FormatFileSize $StorageSavingsBytes
+
+Write-Output ("Total Microsoft 365 groups processed: {0}" -f $Groups.Count)
+Write-Output ("Total folders processed: {0}" -f $Global:TotalFolders)
+Write-Output ("Total files processed: {0}" -f $Global:TotalFiles)
+Write-Output ("Total archived files found: {0}" -f $Global:ReportData.Count)
+Write-Output ("Total size of archived files found: {0}" -f (FormatFileSize $TotalArchivedFilesSize))
+Write-Output ("Estimated storage savings from archived files: {0}" -f $StorageSavings)
 
 # Now analyze the results and output a report of the archived files found in the Microsoft 365 groups.
 

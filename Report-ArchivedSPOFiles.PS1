@@ -173,13 +173,20 @@ Write-Output ("{0} Microsoft 365 groups found" -f $Groups.Count)
 
 ForEach ($Group in $Groups) {
     Write-Output ("Processing group: {0}..." -f $Group.DisplayName)
-    $Uri = ('https://graph.microsoft.com/v1.0/groups/{0}/sites/root' -f $Group.Id)
+    # $Uri = ('https://graph.microsoft.com/v1.0/groups/{0}/sites/root' -f $Group.Id)
     Try {
-        $GroupSite = Invoke-MgGraphRequest -Uri $Uri -Method Get -OutputType PsObject -ErrorAction Stop
+        # $GroupSite = Invoke-MgGraphRequest -Uri $Uri -Method Get -OutputType PsObject -ErrorAction Stop
+        $GroupSite = Get-MgGroupSite -GroupId $Group.Id -SiteId 'root' -ErrorAction Stop
     } Catch {
         Write-Error "Failed to retrieve site for group $($Group.DisplayName): $_"
         Continue
     }  
+
+    # Should check here to find if the site is archived. There is an archivalDetails property defined for
+    # site collections https://learn.microsoft.com/en-us/graph/api/resources/sitecollection?view=graph-rest-1.0 
+    # but it doesn't seem to be implemented by the Get Site API https://learn.microsoft.com/en-us/graph/api/site-get?view=graph-rest-1.0&tabs=http
+    # The alternative is to use Get-SPOSite to fetch the archive status, but that means loading another module...
+
     $SiteId = $GroupSite.Id
     Try {
         # Get default document library (drive) for the site.

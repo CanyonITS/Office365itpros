@@ -10,68 +10,6 @@
 # V1.0 2-Sept-2026
 # GitHub Link:
 
-function Get-SPOArchivedSites {
-   
-    # Function to download a CSV file containg a list of archived sites from a SharePoint site.
-    # Amend these values for your tenant.
-
-    Write-Information "Fetching data about archived sites from SharePoint site..."
-    $ArchivedSitesFileName = "ArchivedSites.csv"
-    $FolderPath = "The Base of All Good in Office 365"
-   
-    $Uri = "https://redmondassociates.sharepoint.com/sites/O365ExchPro"
-    $SiteId = $Uri.Split('//')[1].split("/")[0] + ":/sites/" + $Uri.Split('//')[1].split("/")[2]
-
-    # Get site and default document library
-    Try {
-        $Site = Get-MgSite -SiteId $SiteId -ErrorAction Stop
-    } Catch {
-        Write-Error "Failed to retrieve site information: $_"
-        Return
-    }
-    # Get the default document library for the site
-    Try {
-        $Drive = Get-MgSiteDefaultDrive -SiteId $Site.Id -ErrorAction Stop
-    } Catch {
-        Write-Error "Failed to retrieve default document library: $_"
-        Return
-    }
-
-    # Get the drive item identifier for the file containing the archived sites list.
-    $Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}" -f $Drive.Id, $FolderPath, $ArchivedSitesFileName)
-    Try {
-        $ArchivedSitesItem = Invoke-MgGraphRequest -Uri $Uri -Method GET -ErrorAction Stop
-    } Catch {
-        Write-Error "Failed to retrieve previous Archived Sites item: $_"
-        Return
-    }
-
-    Remove-Item $ArchivedSitesFileName -ErrorAction SilentlyContinue
-
-    $Uri = ("https://graph.microsoft.com/v1.0/drives/{0}/root:/{1}/{2}:/content" -f $Drive.Id, $FolderPath, $ArchivedSitesFileName)
-    Try {
-        Get-MgDriveItemContent -DriveId $Drive.Id -DriveItemId $ArchivedSitesItem.id -OutFile $ArchivedSitesFileName -ErrorAction Stop
-        # Alternatively, you can use Invoke-MgGraphRequest to download the file content
-        # Invoke-MgGraphRequest -Uri $Uri -Method GET -OutputFilePath $ArchivedSitesFileName -ErrorAction Stop
-    } Catch { # handle error noted in https://github.com/microsoftgraph/msgraph-sdk-powershell/issues/3105
-        If ($_.Exception.Message -like "Cannot set percent because PercentComplete cannot be greater than 100*") {
-            # Ignore this specific error
-        } Else {
-            Write-Error "Failed to download ArchivedSites.csv: $_"
-            Return
-        }
-    }
-
-    [array]$ArchivedSites = Import-Csv -Path $ArchivedSitesFileName
-    Write-Information ("{0} archived sites found" -f $ArchivedSites.Count)
-    # Populate a hash table for fast lookup of archived sites
-    $Global:ArchivedSitesHash = @{}
-    ForEach ($Site in $ArchivedSites) {
-        $Global:ArchivedSitesHash.Add($Site.URL, $Site.SiteId)
-    }
-    return $Global:ArchivedSitesHash
-}
-
 function FormatFileSize {
     # Format File Size nicely
     param (
@@ -201,6 +139,7 @@ Try {
 
 $Groups = $Groups | Sort-Object DisplayName
 Write-Output ("{0} Microsoft 365 groups found" -f $Groups.Count)
+[int]$BlockedSites = 0
 
 ForEach ($Group in $Groups) {
     Write-Output ("Processing group: {0}..." -f $Group.DisplayName)
@@ -208,6 +147,7 @@ ForEach ($Group in $Groups) {
     # $GroupSite = Invoke-MgGraphRequest -Uri $Uri -Method Get -OutputType PsObject -ErrorAction Stop
         $GroupSite = Get-MgGroupSite -GroupId $Group.Id -SiteId 'root' -ErrorAction Stop
     } Catch {
+        $BlockedSites++
         $ErrorMessage = $_.Exception.Message
         If ($ErrorMessage -match "notAllowed") {
             Write-Warning "Site is archived or otherwise blocked: $SiteId"
@@ -243,6 +183,9 @@ $StorageSavingsBytes = ($TotalArchivedFilesSize / 4)*3
 $StorageSavings = FormatFileSize $StorageSavingsBytes
 
 Write-Output ("Total Microsoft 365 groups processed: {0}" -f $Groups.Count)
+If ($BlockedSites -gt 0) {
+    Write-Output ("Unable to access Microsoft 365 groups: {0}" -f $BlockedSites)
+}
 Write-Output ("Total folders processed: {0}" -f $Global:TotalFolders)
 Write-Output ("Total files processed: {0}" -f $Global:TotalFiles)
 Write-Output ("Total archived files found: {0}" -f $Global:ReportData.Count)
